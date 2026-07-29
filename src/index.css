@@ -905,6 +905,22 @@ tr.hot td.ing {
   margin-top: auto;
   align-self: flex-start;
 }
+.day-addlink {
+  align-self: flex-start;
+  margin-top: 8px;
+  border: 0;
+  background: transparent;
+  padding: 2px 0;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.day-addlink:hover {
+  background: transparent;
+  color: var(--turmeric);
+}
 .day-recipe {
   display: flex;
   flex-direction: column;

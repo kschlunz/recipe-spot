@@ -159,12 +159,22 @@ export default function PlanScreen() {
                   </div>
                 </div>
               ) : (
-                <button className="day-add" onClick={() => setPicking(d.key)} disabled={loading}>
-                  + Add recipe
-                </button>
+                // Empty day: invite a recipe. A noted day treats the note as the
+                // plan, so the big button gives way to a quiet "add a recipe" link.
+                !note.trim() && (
+                  <button className="day-add" onClick={() => setPicking(d.key)} disabled={loading}>
+                    + Add recipe
+                  </button>
+                )
               )}
 
               <DayNote value={note} onSave={(v) => setNote(d.key, v)} />
+
+              {!recipe && note.trim() && (
+                <button className="day-addlink" onClick={() => setPicking(d.key)} disabled={loading}>
+                  + add a recipe
+                </button>
+              )}
             </div>
           );
         })}
