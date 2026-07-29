@@ -177,13 +177,12 @@ export default function ImportScreen() {
                 {importing ? 'Importing…' : 'Import'}
               </button>
               <button type="button" onClick={() => photoRef.current?.click()} disabled={importing}>
-                📷 Snap / upload a photo
+                📷 Photo / screenshot
               </button>
               <input
                 ref={photoRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
                 style={{ display: 'none' }}
                 onChange={(e) => {
                   const f = e.target.files?.[0];
@@ -192,8 +191,9 @@ export default function ImportScreen() {
               />
             </div>
             <p className="import-hint">
-              Photo works for a cookbook page, a handwritten card, or a screenshot of a reel — Claude
-              reads the recipe right off the image.
+              Upload a photo or screenshot — a cookbook page, a handwritten card, or a screenshot of an
+              Instagram/TikTok caption. Claude reads the recipe right off the image, so you skip the
+              copy-paste.
             </p>
             {status && <p className="status-line">{status}</p>}
             {error && <p className="status-line err">{error}</p>}

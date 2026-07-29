@@ -253,7 +253,6 @@ export default function RecipePage({ slug }: { slug: string }) {
                       ref={photoRef}
                       type="file"
                       accept="image/*"
-                      capture="environment"
                       style={{ display: 'none' }}
                       onChange={(e) => {
                         const f = e.target.files?.[0];
