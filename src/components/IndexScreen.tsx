@@ -3,7 +3,7 @@ import { useRecipeList } from '../hooks/useRecipes';
 import type { RecipeSummary } from '../data/recipe';
 import { effectiveTags, tagKey } from '../lib/tags';
 
-const TAG_LIMIT = 14; // how many filter chips to show before "show all"
+const CAT_LIMIT = 16; // categories shown in the sidebar before "show all"
 
 function RecipeCard({ r }: { r: RecipeSummary }) {
   const tags = effectiveTags(r.tags, r.eyebrow);
@@ -27,11 +27,11 @@ export default function IndexScreen() {
   const { recipes, loading, error } = useRecipeList();
   const [query, setQuery] = useState('');
   const [activeTag, setActiveTag] = useState<string | null>(null); // stores a tag key
-  const [showAllTags, setShowAllTags] = useState(false);
+  const [showAllCats, setShowAllCats] = useState(false);
 
-  // Only tags shared by 2+ recipes make the filter — merged by normalized key,
-  // ranked by how many recipes use them. One-off eyebrow fragments drop out.
-  const tagStats = useMemo(() => {
+  // Categories = tags shared by 3+ recipes, merged by normalized key and ranked
+  // by how many recipes use them. Keeps the browse list meaningful, not a wall.
+  const categories = useMemo(() => {
     const map = new Map<string, { label: string; count: number }>();
     recipes.forEach((r) => {
       const seen = new Set<string>();
@@ -45,12 +45,13 @@ export default function IndexScreen() {
       });
     });
     return [...map.entries()]
-      .filter(([, v]) => v.count >= 2)
+      .filter(([, v]) => v.count >= 3)
       .map(([key, v]) => ({ key, label: v.label, count: v.count }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
   }, [recipes]);
 
-  const shownTags = showAllTags ? tagStats : tagStats.slice(0, TAG_LIMIT);
+  const shownCats = showAllCats ? categories : categories.slice(0, CAT_LIMIT);
+  const activeLabel = activeTag ? categories.find((c) => c.key === activeTag)?.label ?? activeTag : null;
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -82,50 +83,69 @@ export default function IndexScreen() {
         </div>
       </div>
 
-      {tagStats.length > 0 && (
-        <div className="tagrow">
-          <button className="tag" aria-pressed={activeTag === null} onClick={() => setActiveTag(null)}>
-            all
-          </button>
-          {shownTags.map((t) => (
-            <button
-              key={t.key}
-              className="tag"
-              aria-pressed={activeTag === t.key}
-              onClick={() => setActiveTag(activeTag === t.key ? null : t.key)}
-            >
-              {t.label}
+      <div className="index-layout">
+        {categories.length > 0 && (
+          <aside className="index-sidebar">
+            <h2>Browse</h2>
+            <button className="cat" aria-pressed={activeTag === null} onClick={() => setActiveTag(null)}>
+              <span>All recipes</span>
+              <span className="count">{recipes.length}</span>
             </button>
-          ))}
-          {tagStats.length > TAG_LIMIT && (
-            <button className="tag tag-more" onClick={() => setShowAllTags((v) => !v)}>
-              {showAllTags ? 'less ▲' : `+${tagStats.length - TAG_LIMIT} more`}
-            </button>
-          )}
-        </div>
-      )}
+            {shownCats.map((c) => (
+              <button
+                key={c.key}
+                className="cat"
+                aria-pressed={activeTag === c.key}
+                onClick={() => setActiveTag(activeTag === c.key ? null : c.key)}
+              >
+                <span>{c.label}</span>
+                <span className="count">{c.count}</span>
+              </button>
+            ))}
+            {categories.length > CAT_LIMIT && (
+              <button className="cat cat-more" onClick={() => setShowAllCats((v) => !v)}>
+                {showAllCats ? 'show less' : `+${categories.length - CAT_LIMIT} more`}
+              </button>
+            )}
+          </aside>
+        )}
 
-      {loading ? (
-        <p className="loading">Loading recipes…</p>
-      ) : error ? (
-        <p className="status-line err">{error}</p>
-      ) : visible.length === 0 ? (
-        <div className="empty">
-          {recipes.length === 0 ? (
-            <>
-              No recipes yet. <a href="#/new" style={{ color: 'var(--turmeric)' }}>Import your first one →</a>
-            </>
+        <div className="index-main">
+          {activeLabel && (
+            <p className="index-active">
+              {visible.length} in <b>{activeLabel}</b> ·{' '}
+              <button className="linkish" onClick={() => setActiveTag(null)}>
+                clear
+              </button>
+            </p>
+          )}
+
+          {loading ? (
+            <p className="loading">Loading recipes…</p>
+          ) : error ? (
+            <p className="status-line err">{error}</p>
+          ) : visible.length === 0 ? (
+            <div className="empty">
+              {recipes.length === 0 ? (
+                <>
+                  No recipes yet.{' '}
+                  <a href="#/new" style={{ color: 'var(--turmeric)' }}>
+                    Add your first one →
+                  </a>
+                </>
+              ) : (
+                'Nothing matches.'
+              )}
+            </div>
           ) : (
-            'Nothing matches that search.'
+            <div className="card-grid">
+              {visible.map((r) => (
+                <RecipeCard key={r.slug} r={r} />
+              ))}
+            </div>
           )}
         </div>
-      ) : (
-        <div className="card-grid">
-          {visible.map((r) => (
-            <RecipeCard key={r.slug} r={r} />
-          ))}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
