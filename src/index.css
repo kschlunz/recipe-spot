@@ -195,6 +195,10 @@ a {
   border-color: var(--kale);
   color: #fff;
 }
+.tagrow .tag-more {
+  border-style: dashed;
+  color: var(--ink-soft);
+}
 
 .card-grid {
   display: grid;
