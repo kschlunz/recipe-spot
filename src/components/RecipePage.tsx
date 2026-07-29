@@ -130,11 +130,47 @@ function EditPanel({
 export default function RecipePage({ slug }: { slug: string }) {
   const { recipe, tags, loading, error, refresh } = useRecipe(slug);
   const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [actionErr, setActionErr] = useState('');
 
   // The Stew is the flagship example — fall back to the bundled copy if the
   // table hasn't been seeded yet, so /r/the-stew always renders.
   const shown = recipe ?? (slug === 'the-stew' ? STEW : null);
   const editable = recipe !== null; // only DB-backed recipes can be edited
+
+  const duplicate = async () => {
+    if (!recipe) return;
+    setBusy(true);
+    setActionErr('');
+    try {
+      const res = await fetch('/api/recipes', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ recipe: { ...recipe, title: `${recipe.title} (copy)` }, tags }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.slug) throw new Error(j.error || `HTTP ${res.status}`);
+      window.location.hash = `#/r/${j.slug}`;
+    } catch (e) {
+      setActionErr((e as Error).message);
+      setBusy(false);
+    }
+  };
+
+  const del = async () => {
+    if (!window.confirm('Delete this recipe? It will be removed from your library and any day it is planned on.'))
+      return;
+    setBusy(true);
+    setActionErr('');
+    try {
+      const res = await fetch(`/api/recipes?slug=${encodeURIComponent(slug)}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+      window.location.hash = '#/';
+    } catch (e) {
+      setActionErr((e as Error).message);
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="wrap">
@@ -155,12 +191,21 @@ export default function RecipePage({ slug }: { slug: string }) {
                 ))}
               </div>
               {editable && (
-                <button className="rp-edit" onClick={() => setEditing((v) => !v)}>
-                  {editing ? 'Close editor' : 'Edit recipe'}
-                </button>
+                <div className="rp-actions">
+                  <button className="rp-edit" onClick={() => setEditing((v) => !v)}>
+                    {editing ? 'Close editor' : 'Edit recipe'}
+                  </button>
+                  <button onClick={duplicate} disabled={busy}>
+                    Duplicate
+                  </button>
+                  <button className="danger" onClick={del} disabled={busy}>
+                    Delete
+                  </button>
+                </div>
               )}
             </div>
           )}
+          {actionErr && <p className="status-line err">{actionErr}</p>}
 
           {editing && recipe && (
             <EditPanel

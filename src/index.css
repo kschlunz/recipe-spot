@@ -970,6 +970,22 @@ tr.hot td.ing {
   background: var(--kale-wash);
   color: var(--kale);
 }
+.rp-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.rp-actions button {
+  font-size: 12px;
+}
+.rp-actions button.danger {
+  color: #9a3412;
+  border-color: #9a3412;
+}
+.rp-actions button.danger:hover {
+  background: #9a3412;
+  color: #fff;
+}
 .rp-edit {
   font-size: 12px;
 }

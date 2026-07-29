@@ -113,6 +113,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ ok: true, slug });
   }
 
-  res.setHeader('Allow', 'GET, POST, PATCH');
+  if (req.method === 'DELETE') {
+    const slug = typeof req.query.slug === 'string' ? req.query.slug : '';
+    if (!slug) return res.status(400).json({ error: 'Provide ?slug=.' });
+    // meal_plan rows referencing this recipe are removed via ON DELETE CASCADE.
+    const { error } = await supabase.from('recipes').delete().eq('slug', slug);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.status(200).json({ ok: true });
+  }
+
+  res.setHeader('Allow', 'GET, POST, PATCH, DELETE');
   return res.status(405).json({ error: 'Method not allowed' });
 }
