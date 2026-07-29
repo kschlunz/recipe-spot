@@ -470,6 +470,143 @@ tr.hot td.ing {
   opacity: 1;
 }
 
+/* ---------- mobile stacked view (swaps in below 640px) ---------- */
+.stack {
+  display: none;
+}
+.stack-block {
+  margin-top: 22px;
+}
+.stack-h {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--turmeric);
+  margin: 0 0 12px;
+}
+.stack-ing {
+  border: 1.5px solid var(--rule);
+  border-bottom: 0;
+  background: var(--card);
+  padding: 11px 13px;
+  font-size: 15px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.stack-block .stack-ing:last-child {
+  border-bottom: 1.5px solid var(--rule);
+}
+.stack-ing .q {
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.stack-ing .note {
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}
+.stack-ing.off {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+.stack-ing.hot {
+  background: var(--turmeric-wash);
+}
+.stack-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: step;
+}
+.stack-step {
+  border: 1.5px solid var(--rule);
+  background: var(--kale-wash);
+  padding: 13px 14px 12px;
+  margin: 0 0 10px;
+  cursor: pointer;
+}
+.stack-step .s-top {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.stack-step b {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+}
+.stack-step b::before {
+  counter-increment: step;
+  content: counter(step) '. ';
+  font-family: 'Space Mono', monospace;
+  color: var(--kale);
+  font-weight: 700;
+}
+.s-detail {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  color: var(--kale);
+}
+.s-ings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+.s-ings .chip {
+  font-size: 13px;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  padding: 2px 8px;
+}
+.s-ings .chip .q {
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  font-size: 12px;
+}
+.s-ings .carry {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  align-self: center;
+  margin-right: 2px;
+}
+.stack.dim .stack-step,
+.stack.dim .stack-ing {
+  opacity: 0.4;
+}
+.stack.dim .stack-step.hot,
+.stack.dim .stack-ing.hot {
+  opacity: 1;
+}
+.stack-step.hot {
+  background: var(--turmeric);
+  border-color: var(--turmeric);
+  color: #fff;
+}
+.stack-step.hot b::before,
+.stack-step.hot .s-detail {
+  color: var(--turmeric-wash);
+}
+.stack-step.hot .chip {
+  color: var(--ink);
+}
+
+@media (max-width: 640px) {
+  .rg-root .scroll {
+    display: none;
+  }
+  .stack {
+    display: block;
+  }
+}
+
 .notes {
   margin-top: 48px;
   border-top: 1.5px solid var(--rule);

@@ -84,6 +84,27 @@ export default function RecipeView({ recipe }: Props) {
   const hotRows = cooking && spans[step] ? [spans[step].min, spans[step].max] : null;
   const rowHot = (r: number) => hotRows && r >= hotRows[0] && r <= hotRows[1];
 
+  const toggleStruck = (id: string) => {
+    const next = new Set(struck);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setStruck(next);
+  };
+
+  // For the mobile stacked view: the ingredients that first enter the pot at a
+  // given step (its leaf inputs), and whether it also folds in an earlier step.
+  const ingById = useMemo(() => {
+    const m: Record<string, Ingredient> = {};
+    recipe.ingredients.forEach((g) => (m[g.id] = g));
+    return m;
+  }, [recipe]);
+
+  const enteringFor = (sp: Span) => {
+    const entering = (sp.step.inputs || []).filter((id) => ingById[id]).map((id) => ingById[id]);
+    const carries = (sp.step.inputs || []).some((id) => !ingById[id]);
+    return { entering, carries };
+  };
+
   type Cell =
     | { kind: 'gap'; key: string; rowSpan: number }
     | { kind: 'step'; key: string; sp: Span; j: number; rowSpan: number };
@@ -197,12 +218,7 @@ export default function RecipeView({ recipe }: Props) {
                   <tr key={g.id} className={rowHot(r) ? 'hot' : ''}>
                     <td
                       className={'ing' + (struck.has(g.id) ? ' off' : '')}
-                      onClick={() => {
-                        const next = new Set(struck);
-                        if (next.has(g.id)) next.delete(g.id);
-                        else next.add(g.id);
-                        setStruck(next);
-                      }}
+                      onClick={() => toggleStruck(g.id)}
                     >
                       {q && <span className="q">{q}</span>}
                       {q ? ' ' : ''}
@@ -229,6 +245,67 @@ export default function RecipeView({ recipe }: Props) {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {!grid.err && (
+        <div className={'stack' + (cooking ? ' dim' : '')}>
+          <section className="stack-block">
+            <h2 className="stack-h">Ingredients</h2>
+            {recipe.ingredients.map((g, r) => {
+              const q = qtyFor(g);
+              return (
+                <div
+                  key={g.id}
+                  className={
+                    'stack-ing' + (struck.has(g.id) ? ' off' : '') + (rowHot(r) ? ' hot' : '')
+                  }
+                  onClick={() => toggleStruck(g.id)}
+                >
+                  {q && <span className="q">{q}</span>}
+                  {q ? ' ' : ''}
+                  {g.name}
+                  {g.note && <span className="note"> — {g.note}</span>}
+                </div>
+              );
+            })}
+          </section>
+
+          <section className="stack-block">
+            <h2 className="stack-h">Steps</h2>
+            <ol className="stack-steps">
+              {spans.map((sp, j) => {
+                const { entering, carries } = enteringFor(sp);
+                return (
+                  <li
+                    key={sp.step.id}
+                    className={'stack-step' + (cooking && step === j ? ' hot' : '')}
+                    onClick={() => goTo(j)}
+                  >
+                    <div className="s-top">
+                      <b>{sp.step.verb}</b>
+                      {sp.step.detail && <span className="s-detail">{sp.step.detail}</span>}
+                    </div>
+                    {(carries || entering.length > 0) && (
+                      <div className="s-ings">
+                        {carries && <span className="carry">everything so far</span>}
+                        {entering.map((g) => {
+                          const q = qtyFor(g);
+                          return (
+                            <span key={g.id} className="chip">
+                              {q && <span className="q">{q}</span>}
+                              {q ? ' ' : ''}
+                              {g.name}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
         </div>
       )}
 
