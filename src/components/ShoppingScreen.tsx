@@ -118,8 +118,10 @@ export default function ShoppingScreen() {
       ) : (
         <>
           <p className="shop-tip">
-            Tick off what you already have — <b>Copy list</b> copies only what's left. Pasting into Apple
-            Notes? Paste, then select all and tap the checklist button to make them tickable.
+            Rolled up from your planned recipes and any day notes (like "grill chicken and veggies") —
+            "leftovers" and "eat out" are skipped. Tick off what you already have; <b>Copy list</b> copies
+            only what's left. Pasting into Apple Notes? Paste, then select all and tap the checklist button
+            to make them tickable.
           </p>
           <ul className="shop-list">
             {items.map((it) => {
