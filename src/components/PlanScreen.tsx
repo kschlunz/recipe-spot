@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DAYS, useMealPlan, type Day, type PlanEntry } from '../hooks/useMealPlan';
 import { useRecipeList } from '../hooks/useRecipes';
 
@@ -62,18 +62,39 @@ function RecipePicker({
   );
 }
 
+// A free-text note for a day ("Kate grills chicken", "leftovers", "eat out").
+// Saves on blur, only when the text actually changed.
+function DayNote({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const [text, setText] = useState(value);
+  useEffect(() => {
+    setText(value);
+  }, [value]);
+  return (
+    <textarea
+      className="day-note"
+      rows={2}
+      placeholder="Note — leftovers, eat out, who's cooking…"
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => {
+        if (text.trim() !== value.trim()) onSave(text.trim());
+      }}
+    />
+  );
+}
+
 export default function PlanScreen() {
-  const { plan, loading, error, assign, remove, clear } = useMealPlan();
+  const { plan, loading, error, assignRecipe, removeRecipe, setNote, clear } = useMealPlan();
   const [picking, setPicking] = useState<Day | null>(null);
 
-  const filled = DAYS.filter((d) => plan[d.key]).length;
+  const filled = DAYS.filter((d) => plan[d.key].recipe || plan[d.key].note.trim()).length;
   const pickingLabel = picking ? DAYS.find((d) => d.key === picking)!.label : '';
 
   return (
     <div className="wrap">
       <div className="index-head">
         <h1>This Week</h1>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <span
             style={{
               fontFamily: "'Space Mono', monospace",
@@ -84,9 +105,12 @@ export default function PlanScreen() {
           >
             {filled}/7 planned
           </span>
+          <a href="#/shopping" className="go" style={{ padding: '6px 13px', textDecoration: 'none' }}>
+            🛒 Shopping list
+          </a>
           <button
             onClick={() => {
-              if (filled > 0 && window.confirm('Clear all recipes from this week?')) clear();
+              if (filled > 0 && window.confirm('Clear all recipes and notes from this week?')) clear();
             }}
             disabled={filled === 0}
           >
@@ -99,19 +123,20 @@ export default function PlanScreen() {
 
       <div className="week-grid">
         {DAYS.map((d) => {
-          const entry = plan[d.key];
+          const { recipe, note } = plan[d.key];
           return (
-            <div key={d.key} className={'day-card' + (entry ? ' has' : '')}>
+            <div key={d.key} className={'day-card' + (recipe || note.trim() ? ' has' : '')}>
               <div className="day-label">{d.label}</div>
-              {entry ? (
+
+              {recipe ? (
                 <div className="day-recipe">
-                  <a className="day-recipe-link" href={`#/r/${entry.slug}`}>
-                    {entry.eyebrow && <span className="eyebrow">{entry.eyebrow}</span>}
-                    <b>{entry.title}</b>
+                  <a className="day-recipe-link" href={`#/r/${recipe.slug}`}>
+                    {recipe.eyebrow && <span className="eyebrow">{recipe.eyebrow}</span>}
+                    <b>{recipe.title}</b>
                   </a>
                   <div className="day-actions">
                     <button onClick={() => setPicking(d.key)}>Change</button>
-                    <button onClick={() => remove(d.key)}>Remove</button>
+                    <button onClick={() => removeRecipe(d.key)}>Remove</button>
                   </div>
                 </div>
               ) : (
@@ -119,6 +144,8 @@ export default function PlanScreen() {
                   + Add recipe
                 </button>
               )}
+
+              <DayNote value={note} onSave={(v) => setNote(d.key, v)} />
             </div>
           );
         })}
@@ -129,7 +156,7 @@ export default function PlanScreen() {
           dayLabel={pickingLabel}
           onClose={() => setPicking(null)}
           onPick={(entry) => {
-            assign(picking, entry);
+            assignRecipe(picking, entry);
             setPicking(null);
           }}
         />
