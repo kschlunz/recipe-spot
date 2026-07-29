@@ -15,3 +15,9 @@ export function deriveTags(eyebrow?: string): string[] {
 export function effectiveTags(tags: string[] | undefined, eyebrow?: string): string[] {
   return tags && tags.length ? tags : deriveTags(eyebrow);
 }
+
+// Normalized key used to merge duplicates that differ only by case, hyphens, or
+// spaces ("Weeknight" / "weeknight", "one pot" / "one-pot").
+export function tagKey(t: string): string {
+  return t.toLowerCase().replace(/[\s\-_]+/g, '');
+}
