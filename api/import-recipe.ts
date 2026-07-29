@@ -1,0 +1,233 @@
+// api/import-recipe.ts — Vercel serverless function
+// POST { url: string } or { text: string }  →  { recipe, source, extractedFrom }
+//
+// Flow: fetch page server-side (no CORS problem) → pull schema.org/Recipe
+// JSON-LD if present → Claude restructures it into the recipe tree schema →
+// validate → return. Falls back to raw page text when there's no JSON-LD.
+//
+// Env: ANTHROPIC_API_KEY (read automatically by the SDK)
+
+import Anthropic from '@anthropic-ai/sdk';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+const anthropic = new Anthropic();
+const MODEL = 'claude-sonnet-5';
+
+/* ---------- schema the renderer expects ---------- */
+const SCHEMA_DOC = `{
+  "title": string,
+  "eyebrow": string,          // short vibe line, e.g. "One pot · vegetarian"
+  "tagline": string,          // one-sentence description
+  "serves": number,
+  "active": string,           // e.g. "20 min"
+  "total": string,
+  "vessel": string,           // main pot/pan
+  "prep": string,             // optional single setup line shown above the grid
+  "ingredients": [            // ORDER MATTERS — see rules
+    { "id": string, "name": string, "note": string?,
+      "us": { "q": number, "u": string }?,      // q=0 or omitted = "to taste"
+      "metric": { "q": number, "u": string }? }
+  ],
+  "steps": [
+    { "id": string,           // "s1", "s2", ...
+      "verb": string,         // 2-4 words shown in the grid cell
+      "detail": string,       // timing/technique, e.g. "8-10 min · stir often"
+      "seconds": number,      // timer for cook mode; 0 if untimed
+      "title": string,        // full sentence for the cook-mode stage bar
+      "inputs": [string] }    // ingredient ids AND/OR earlier step ids
+  ],
+  "notes": [ { "h": string, "p": string } ],   // tips, storage, substitutions
+  "credit": string
+}`;
+
+const RULES = `Rules:
+1. Every ingredient must appear in exactly one step's inputs. A step that uses
+   the output of an earlier step lists that step's id as an input.
+2. CONTIGUITY (critical): order the ingredients list so that the full set of
+   ingredients under each step (transitively, through step inputs) forms an
+   unbroken block of consecutive rows. List ingredients in the order they
+   first enter the pot. For a recipe with parallel components (a sauce made
+   separately, then combined), group each component's ingredients together.
+3. Convert quantities to both us and metric using sensible cooking conversions.
+   Garnish/serving items with no real quantity: omit us/metric entirely.
+4. seconds = the lower bound of the step's time range in seconds; 0 if untimed.
+5. Move tips, storage, and substitution advice out of the instructions and
+   into notes. Keep step verbs terse.
+6. Respond with ONLY the JSON object. No markdown fences, no preamble.`;
+
+/* ---------- JSON-LD extraction ---------- */
+function findRecipeNode(node: any): any | null {
+  if (!node || typeof node !== 'object') return null;
+  if (Array.isArray(node)) {
+    for (const n of node) {
+      const r = findRecipeNode(n);
+      if (r) return r;
+    }
+    return null;
+  }
+  const t = node['@type'];
+  const types = Array.isArray(t) ? t : [t];
+  if (types.includes('Recipe')) return node;
+  if (node['@graph']) return findRecipeNode(node['@graph']);
+  return null;
+}
+
+function extractJsonLd(html: string): any | null {
+  const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) {
+    try {
+      const r = findRecipeNode(JSON.parse(m[1].trim()));
+      if (r) return r;
+    } catch {
+      /* malformed block — keep scanning */
+    }
+  }
+  return null;
+}
+
+function instructionsToText(ins: any): string {
+  if (!ins) return '';
+  if (typeof ins === 'string') return ins;
+  if (Array.isArray(ins))
+    return ins
+      .map((i) =>
+        typeof i === 'string'
+          ? i
+          : i['@type'] === 'HowToSection'
+            ? `${i.name || ''}\n${instructionsToText(i.itemListElement)}`
+            : i.text || i.name || '',
+      )
+      .filter(Boolean)
+      .join('\n');
+  return ins.text || '';
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&[a-z#0-9]+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .slice(0, 20000); // plenty for any recipe, keeps the prompt sane
+}
+
+/* ---------- validation (mirror of the renderer's buildGrid) ---------- */
+function validateRecipe(r: any): string | null {
+  if (!r?.ingredients?.length || !r?.steps?.length) return 'Missing ingredients or steps.';
+  const leaf: Record<string, number> = {};
+  r.ingredients.forEach((g: any, i: number) => (leaf[g.id] = i));
+  const byId: Record<string, any> = {};
+  r.steps.forEach((s: any) => (byId[s.id] = s));
+  const memo: Record<string, number[]> = {};
+  const leaves = (sid: string, seen: Set<string>): number[] => {
+    if (memo[sid]) return memo[sid];
+    if (seen.has(sid)) throw new Error(`step loop at ${sid}`);
+    seen.add(sid);
+    let out: number[] = [];
+    for (const inp of byId[sid].inputs || []) {
+      if (inp in leaf) out.push(leaf[inp]);
+      else if (byId[inp]) out = out.concat(leaves(inp, seen));
+      else throw new Error(`unknown input "${inp}" in ${sid}`);
+    }
+    out = [...new Set(out)].sort((a, b) => a - b);
+    memo[sid] = out;
+    return out;
+  };
+  try {
+    for (const s of r.steps) {
+      const L = leaves(s.id, new Set());
+      if (!L.length) return `step ${s.id} has no ingredients`;
+      if (L[L.length - 1] - L[0] + 1 !== L.length) return `step ${s.id} spans non-contiguous ingredients`;
+    }
+  } catch (e: any) {
+    return e.message;
+  }
+  return null;
+}
+
+/* ---------- Claude call ---------- */
+async function convert(sourceLabel: string, material: string): Promise<any> {
+  const message = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 4000,
+    system: `You convert recipes into a strict JSON schema for a Cooking for
+Engineers-style tabular renderer, where ingredients are tree leaves and each
+step merges its inputs.\n\nSchema:\n${SCHEMA_DOC}\n\n${RULES}`,
+    messages: [{ role: 'user', content: `Source (${sourceLabel}):\n\n${material}` }],
+  });
+  const text = message.content
+    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .map((b) => b.text)
+    .join('\n')
+    .replace(/```json|```/g, '')
+    .trim();
+  return JSON.parse(text);
+}
+
+/* ---------- handler ---------- */
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  const { url, text } = req.body ?? {};
+  if (!url && !text) return res.status(400).json({ error: 'Provide url or text.' });
+
+  try {
+    let material = text as string | undefined;
+    let extractedFrom = 'pasted text';
+
+    if (url) {
+      const page = await fetch(url, {
+        headers: {
+          // some blogs 403 the default fetch UA; a browser UA usually passes
+          'user-agent':
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+          accept: 'text/html',
+        },
+      });
+      if (!page.ok) {
+        return res.status(422).json({
+          error: `Couldn't fetch that page (HTTP ${page.status}). Paste the recipe text instead.`,
+        });
+      }
+      const html = await page.text();
+      const ld = extractJsonLd(html);
+      if (ld) {
+        extractedFrom = 'schema.org JSON-LD';
+        material = JSON.stringify({
+          name: ld.name,
+          description: ld.description,
+          recipeYield: ld.recipeYield,
+          prepTime: ld.prepTime,
+          cookTime: ld.cookTime,
+          totalTime: ld.totalTime,
+          recipeIngredient: ld.recipeIngredient,
+          recipeInstructions: instructionsToText(ld.recipeInstructions),
+        });
+      } else {
+        extractedFrom = 'page text (no JSON-LD found)';
+        material = stripHtml(html);
+      }
+    }
+
+    let recipe = await convert(extractedFrom, material!);
+
+    // one repair pass if the tree is invalid
+    let problem = validateRecipe(recipe);
+    if (problem) {
+      recipe = await convert(
+        extractedFrom,
+        `${material}\n\nYour previous attempt failed validation: "${problem}". ` +
+          `Previous attempt:\n${JSON.stringify(recipe)}\n\nFix it. Remember the contiguity rule.`,
+      );
+      problem = validateRecipe(recipe);
+      if (problem) {
+        return res.status(422).json({ error: `Conversion failed validation: ${problem}`, draft: recipe });
+      }
+    }
+
+    return res.status(200).json({ recipe, source: url ?? null, extractedFrom });
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message });
+  }
+}
