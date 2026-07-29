@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import RecipeView from './RecipeView';
+import CookNotes from './CookNotes';
 import { useRecipe } from '../hooks/useRecipes';
 import { buildGrid } from '../lib/recipeGrid';
 import { STEW, type Recipe } from '../data/recipe';
@@ -218,6 +219,7 @@ export default function RecipePage({ slug }: { slug: string }) {
           )}
 
           <RecipeView recipe={shown} />
+          {editable && <CookNotes slug={slug} />}
         </>
       ) : (
         <div className="empty">{error ? `Couldn't load that recipe: ${error}` : 'Recipe not found.'}</div>
