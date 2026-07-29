@@ -102,19 +102,46 @@ values (
 )
 on conflict (slug) do nothing;
 
--- Weekly meal plan: each day holds a recipe and/or a free-text note
--- ("Kate grills chicken", "leftovers", "eat out"). Persistent until cleared.
+-- Weekly meal plan. Each day can hold a free-text note ("Kate grills chicken",
+-- "leftovers", "eat out") AND any number of recipes. The note lives in
+-- meal_plan (one row per day); the recipes live in meal_plan_recipes (many rows
+-- per day). Persistent until cleared.
 -- (Run this block too if you already created the recipes table earlier.)
 create table if not exists public.meal_plan (
   day         text primary key check (day in ('mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun')),
   recipe_slug text references public.recipes(slug) on delete set null,
   note        text,
-  servings    integer,   -- target servings for that day; null = the recipe's own serves
+  servings    integer,   -- legacy day-level servings; recipe servings now live on meal_plan_recipes
   updated_at  timestamptz default now()
 );
 
 -- RLS on, no public policies: all access flows through the serverless functions.
 alter table public.meal_plan enable row level security;
+
+-- One row per recipe planned on a day. Multiple recipes per day are allowed
+-- (dinner + a dessert, say). Each carries its own target servings.
+create table if not exists public.meal_plan_recipes (
+  id          uuid primary key default gen_random_uuid(),
+  day         text not null check (day in ('mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun')),
+  recipe_slug text not null references public.recipes(slug) on delete cascade,
+  servings    integer,   -- target servings for this dish; null = the recipe's own serves
+  position    integer default 0,
+  created_at  timestamptz default now()
+);
+create index if not exists meal_plan_recipes_day_idx
+  on public.meal_plan_recipes(day, position, created_at);
+alter table public.meal_plan_recipes enable row level security;
+
+-- Migrate existing single-recipe days into the new list table. Idempotent:
+-- only inserts a (day, recipe) pair that isn't already there.
+insert into public.meal_plan_recipes (day, recipe_slug, servings, position)
+select mp.day, mp.recipe_slug, mp.servings, 0
+from public.meal_plan mp
+where mp.recipe_slug is not null
+  and not exists (
+    select 1 from public.meal_plan_recipes r
+    where r.day = mp.day and r.recipe_slug = mp.recipe_slug
+  );
 
 -- Cook notes: a timestamped log per recipe ("added more garlic, +5 min").
 create table if not exists public.cook_notes (

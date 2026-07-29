@@ -18,7 +18,7 @@ function AddToWeek({ slug }: { slug: string }) {
       const res = await fetch('/api/meal-plan', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ day, recipe_slug: slug }),
+        body: JSON.stringify({ day, add: slug }),
       });
       if (!res.ok) throw new Error();
       setAdded(label);

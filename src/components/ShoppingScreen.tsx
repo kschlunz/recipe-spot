@@ -26,6 +26,7 @@ const lineOf = (it: Item) => {
 
 export default function ShoppingScreen() {
   const [items, setItems] = useState<Item[]>([]);
+  const [noteItems, setNoteItems] = useState<Item[]>([]);
   const [recipes, setRecipes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +43,7 @@ export default function ShoppingScreen() {
       .then((json) => {
         if (!alive) return;
         setItems(json.items ?? []);
+        setNoteItems(json.noteItems ?? []);
         setRecipes(json.recipes ?? []);
       })
       .catch((e) => alive && setError((e as Error).message))
@@ -51,7 +53,11 @@ export default function ShoppingScreen() {
     };
   }, []);
 
-  const remaining = useMemo(() => items.filter((it) => !checked.has(keyOf(it))).length, [items, checked]);
+  const allItems = useMemo(() => [...items, ...noteItems], [items, noteItems]);
+  const remaining = useMemo(
+    () => allItems.filter((it) => !checked.has(keyOf(it))).length,
+    [allItems, checked],
+  );
 
   const toggle = (it: Item) => {
     const k = keyOf(it);
@@ -64,7 +70,7 @@ export default function ShoppingScreen() {
   };
 
   const copyList = () => {
-    const text = items
+    const text = allItems
       .filter((it) => !checked.has(keyOf(it)))
       .map(lineOf)
       .join('\n');
@@ -77,6 +83,28 @@ export default function ShoppingScreen() {
     );
   };
 
+  const renderItem = (it: Item) => {
+    const k = keyOf(it);
+    const on = checked.has(k);
+    const m = measured(it);
+    return (
+      <li key={k} className={'shop-item' + (on ? ' off' : '')} onClick={() => toggle(it)}>
+        <span className={'shop-check' + (on ? ' on' : '')} aria-hidden>
+          {on ? '✓' : ''}
+        </span>
+        <span className="shop-body">
+          <span className="shop-name">
+            {m && <span className="q">{m} </span>}
+            {it.name}
+            {!m && it.toTaste && <span className="note"> (to taste)</span>}
+            {it.note && <span className="note"> — {it.note}</span>}
+          </span>
+          {it.sources.length > 0 && <span className="shop-src">{it.sources.join(' · ')}</span>}
+        </span>
+      </li>
+    );
+  };
+
   return (
     <div className="wrap">
       <a className="backlink" href="#/plan">
@@ -85,7 +113,7 @@ export default function ShoppingScreen() {
 
       <div className="index-head">
         <h1>Shopping list</h1>
-        {items.length > 0 && (
+        {allItems.length > 0 && (
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center' }}>
             <span
               style={{
@@ -108,7 +136,7 @@ export default function ShoppingScreen() {
         <p className="loading">Building your list…</p>
       ) : error ? (
         <p className="status-line err">{error}</p>
-      ) : items.length === 0 ? (
+      ) : allItems.length === 0 ? (
         <div className="empty">
           Nothing planned with a recipe yet.{' '}
           <a href="#/plan" style={{ color: 'var(--turmeric)' }}>
@@ -123,29 +151,15 @@ export default function ShoppingScreen() {
             only what's left. Pasting into Apple Notes? Paste, then select all and tap the checklist button
             to make them tickable.
           </p>
-          <ul className="shop-list">
-            {items.map((it) => {
-              const k = keyOf(it);
-              const on = checked.has(k);
-              const m = measured(it);
-              return (
-                <li key={k} className={'shop-item' + (on ? ' off' : '')} onClick={() => toggle(it)}>
-                  <span className={'shop-check' + (on ? ' on' : '')} aria-hidden>
-                    {on ? '✓' : ''}
-                  </span>
-                  <span className="shop-body">
-                    <span className="shop-name">
-                      {m && <span className="q">{m} </span>}
-                      {it.name}
-                      {!m && it.toTaste && <span className="note"> (to taste)</span>}
-                      {it.note && <span className="note"> — {it.note}</span>}
-                    </span>
-                    {it.sources.length > 0 && <span className="shop-src">{it.sources.join(' · ')}</span>}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+          {items.length > 0 && <ul className="shop-list">{items.map(renderItem)}</ul>}
+
+          {noteItems.length > 0 && (
+            <>
+              <h2 className="shop-section">Your notes</h2>
+              <p className="shop-section-hint">Groceries pulled from what you jotted on each day.</p>
+              <ul className="shop-list">{noteItems.map(renderItem)}</ul>
+            </>
+          )}
         </>
       )}
     </div>
