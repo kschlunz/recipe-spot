@@ -9,6 +9,16 @@ import { fileToResizedBase64 } from '../lib/image';
 import { STEW, type Recipe } from '../data/recipe';
 import { DAYS, type Day } from '../hooks/useMealPlan';
 
+// Show the source as a clean domain ("nytimes.com") when we can parse it,
+// falling back to the raw string otherwise.
+function prettyUrl(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
 function AddToWeek({ slug }: { slug: string }) {
   const [added, setAdded] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -132,7 +142,7 @@ function EditPanel({
 }
 
 export default function RecipePage({ slug }: { slug: string }) {
-  const { recipe, tags, photoUrl, loading, error, refresh } = useRecipe(slug);
+  const { recipe, tags, photoUrl, sourceUrl, loading, error, refresh } = useRecipe(slug);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionErr, setActionErr] = useState('');
@@ -293,6 +303,14 @@ export default function RecipePage({ slug }: { slug: string }) {
           )}
 
           <RecipeView recipe={shown} />
+          {sourceUrl && (
+            <p className="recipe-source">
+              Source:{' '}
+              <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
+                {prettyUrl(sourceUrl)}
+              </a>
+            </p>
+          )}
           {editable && <CookNotes slug={slug} />}
         </>
       ) : (
