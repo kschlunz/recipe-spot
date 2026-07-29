@@ -57,7 +57,15 @@ const RULES = `Rules:
 4. seconds = the lower bound of the step's time range in seconds; 0 if untimed.
 5. Move tips, storage, and substitution advice out of the instructions and
    into notes. Keep step verbs terse.
-6. Respond with ONLY the JSON object. No markdown fences, no preamble.`;
+6. PARALLEL COMPONENTS: when a component is made separately and only added at
+   the end (a sauce, glaze, topping, dressing, streusel), its mixing step's
+   inputs must be ONLY that component's own ingredients — never another step.
+   Do not make the sauce step consume the main mixture just because the sauce
+   is later poured on it. Combine the components in a LATER step (assemble,
+   bake, top, serve) that lists both step ids as its inputs. Example: a
+   meatloaf has s_loaf (loaf ingredients), s_sauce (sauce ingredients only),
+   then s_bake with inputs [s_loaf, s_sauce].
+7. Respond with ONLY the JSON object. No markdown fences, no preamble.`;
 
 /* ---------- JSON-LD extraction ---------- */
 function findRecipeNode(node: any): any | null {

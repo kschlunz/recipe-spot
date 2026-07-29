@@ -948,6 +948,55 @@ tr.hot td.ing {
   color: var(--turmeric);
 }
 
+/* ---------- recipe meta row (tags + edit) ---------- */
+.rp-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 20px;
+}
+.rtags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
+.rtags span {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding: 3px 9px;
+  background: var(--kale-wash);
+  color: var(--kale);
+}
+.rp-edit {
+  font-size: 12px;
+}
+.edit-label {
+  display: block;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 6px;
+}
+.edit-tags {
+  width: 100%;
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  border: 1.5px solid var(--rule);
+  background: var(--paper);
+  color: var(--ink);
+  padding: 9px 11px;
+  margin: 0 0 12px;
+}
+.edit-tags:focus-visible {
+  outline: 2.5px solid var(--turmeric);
+  outline-offset: 2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;

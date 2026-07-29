@@ -26,22 +26,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!supabase) return;
 
   if (req.method === 'GET') {
-    const { data, error } = await supabase
-      .from('meal_plan')
-      .select('day, recipe:recipes(slug, title, data)');
-    if (error) return res.status(500).json({ error: error.message });
-
     const plan: Record<string, { slug: string; title: string; eyebrow?: string; tagline?: string } | null> = {};
     DAYS.forEach((d) => (plan[d] = null));
-    for (const row of data ?? []) {
-      const r: any = Array.isArray((row as any).recipe) ? (row as any).recipe[0] : (row as any).recipe;
-      if (r) {
-        plan[(row as any).day] = {
-          slug: r.slug,
-          title: r.title,
-          eyebrow: r.data?.eyebrow ?? '',
-          tagline: r.data?.tagline ?? '',
-        };
+
+    const { data: rows, error } = await supabase.from('meal_plan').select('day, recipe_slug');
+    if (error) return res.status(500).json({ error: error.message });
+
+    const slugs = [...new Set((rows ?? []).map((r: any) => r.recipe_slug))];
+    if (slugs.length > 0) {
+      const { data: recipes, error: rErr } = await supabase
+        .from('recipes')
+        .select('slug, title, data')
+        .in('slug', slugs);
+      if (rErr) return res.status(500).json({ error: rErr.message });
+
+      const bySlug = new Map<string, any>();
+      (recipes ?? []).forEach((r: any) => bySlug.set(r.slug, r));
+      for (const row of rows ?? []) {
+        const r = bySlug.get((row as any).recipe_slug);
+        if (r) {
+          plan[(row as any).day] = {
+            slug: r.slug,
+            title: r.title,
+            eyebrow: r.data?.eyebrow ?? '',
+            tagline: r.data?.tagline ?? '',
+          };
+        }
       }
     }
     res.setHeader('Cache-Control', 'no-store');

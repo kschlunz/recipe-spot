@@ -101,6 +101,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  res.setHeader('Allow', 'GET, POST');
+  if (req.method === 'PATCH') {
+    const { slug, recipe, tags } = req.body ?? {};
+    if (!slug || !recipe || !recipe.title || !Array.isArray(recipe.ingredients) || !Array.isArray(recipe.steps)) {
+      return res.status(400).json({ error: 'Provide slug and a valid recipe with title, ingredients, and steps.' });
+    }
+    const update: Record<string, unknown> = { data: recipe, title: recipe.title };
+    if (Array.isArray(tags)) update.tags = tags;
+    const { error } = await supabase.from('recipes').update(update).eq('slug', slug);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.status(200).json({ ok: true, slug });
+  }
+
+  res.setHeader('Allow', 'GET, POST, PATCH');
   return res.status(405).json({ error: 'Method not allowed' });
 }

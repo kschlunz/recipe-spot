@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import RecipeView from './RecipeView';
 import { useRecipe } from '../hooks/useRecipes';
-import { STEW } from '../data/recipe';
+import { buildGrid } from '../lib/recipeGrid';
+import { STEW, type Recipe } from '../data/recipe';
 import { DAYS, type Day } from '../hooks/useMealPlan';
 
 function AddToWeek({ slug }: { slug: string }) {
@@ -52,12 +53,88 @@ function AddToWeek({ slug }: { slug: string }) {
   );
 }
 
+function EditPanel({
+  slug,
+  recipe,
+  tags,
+  onSaved,
+  onClose,
+}: {
+  slug: string;
+  recipe: Recipe;
+  tags: string[];
+  onSaved: () => void;
+  onClose: () => void;
+}) {
+  const [json, setJson] = useState(() => JSON.stringify(recipe, null, 2));
+  const [tagStr, setTagStr] = useState(tags.join(', '));
+  const [err, setErr] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    let parsed: Recipe;
+    try {
+      parsed = JSON.parse(json) as Recipe;
+      buildGrid(parsed); // validate the tree lays out before saving
+    } catch (e) {
+      setErr((e as Error).message);
+      return;
+    }
+    setSaving(true);
+    setErr('');
+    try {
+      const res = await fetch('/api/recipes', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          slug,
+          recipe: parsed,
+          tags: tagStr
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean),
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+      onSaved();
+      onClose();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="json-panel">
+      <p className="json-hint">
+        Edit the recipe. Ingredients are leaves; each step lists its inputs (ingredient ids or earlier
+        step ids). To fix a separately-made component (a sauce, glaze, topping), make its step's inputs
+        only that component's ingredients, and merge it into a later step. Changes are validated before
+        saving.
+      </p>
+      <label className="edit-label">Tags (comma separated)</label>
+      <input className="edit-tags" type="text" value={tagStr} onChange={(e) => setTagStr(e.target.value)} />
+      <textarea spellCheck={false} value={json} onChange={(e) => setJson(e.target.value)} />
+      {err && <p className="json-err">{err}</p>}
+      <div className="import-actions">
+        <button className="go" onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : 'Save changes'}
+        </button>
+        <button onClick={onClose}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 export default function RecipePage({ slug }: { slug: string }) {
-  const { recipe, loading, error } = useRecipe(slug);
+  const { recipe, tags, loading, error, refresh } = useRecipe(slug);
+  const [editing, setEditing] = useState(false);
 
   // The Stew is the flagship example — fall back to the bundled copy if the
   // table hasn't been seeded yet, so /r/the-stew always renders.
   const shown = recipe ?? (slug === 'the-stew' ? STEW : null);
+  const editable = recipe !== null; // only DB-backed recipes can be edited
 
   return (
     <div className="wrap">
@@ -69,6 +146,32 @@ export default function RecipePage({ slug }: { slug: string }) {
       ) : shown ? (
         <>
           <AddToWeek slug={slug} />
+
+          {(tags.length > 0 || editable) && (
+            <div className="rp-meta">
+              <div className="rtags">
+                {tags.map((t) => (
+                  <span key={t}>{t}</span>
+                ))}
+              </div>
+              {editable && (
+                <button className="rp-edit" onClick={() => setEditing((v) => !v)}>
+                  {editing ? 'Close editor' : 'Edit recipe'}
+                </button>
+              )}
+            </div>
+          )}
+
+          {editing && recipe && (
+            <EditPanel
+              slug={slug}
+              recipe={recipe}
+              tags={tags}
+              onSaved={refresh}
+              onClose={() => setEditing(false)}
+            />
+          )}
+
           <RecipeView recipe={shown} />
         </>
       ) : (
