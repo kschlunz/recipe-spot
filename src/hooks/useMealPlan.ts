@@ -13,12 +13,22 @@ export const DAYS = [
 export type Day = (typeof DAYS)[number]['key'];
 
 export type PlanEntry = { slug: string; title: string; eyebrow?: string; tagline?: string };
-export type Plan = Record<Day, PlanEntry | null>;
+export type DayPlan = { recipe: PlanEntry | null; note: string };
+export type Plan = Record<Day, DayPlan>;
 
-const EMPTY: Plan = { mon: null, tue: null, wed: null, thu: null, fri: null, sat: null, sun: null };
+const emptyDay = (): DayPlan => ({ recipe: null, note: '' });
+const emptyPlan = (): Plan => ({
+  mon: emptyDay(),
+  tue: emptyDay(),
+  wed: emptyDay(),
+  thu: emptyDay(),
+  fri: emptyDay(),
+  sat: emptyDay(),
+  sun: emptyDay(),
+});
 
 export function useMealPlan() {
-  const [plan, setPlan] = useState<Plan>(EMPTY);
+  const [plan, setPlan] = useState<Plan>(emptyPlan);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,7 +39,7 @@ export function useMealPlan() {
       const res = await fetch('/api/meal-plan');
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
       const json = await res.json();
-      setPlan({ ...EMPTY, ...(json.plan ?? {}) });
+      setPlan({ ...emptyPlan(), ...(json.plan ?? {}) });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -41,32 +51,45 @@ export function useMealPlan() {
     refresh();
   }, [refresh]);
 
-  const assign = useCallback(
-    async (day: Day, entry: PlanEntry) => {
-      // optimistic
-      setPlan((p) => ({ ...p, [day]: entry }));
-      const res = await fetch('/api/meal-plan', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ day, recipe_slug: entry.slug }),
-      });
-      if (!res.ok) {
-        setError((await res.json().catch(() => ({}))).error || 'Could not update the plan.');
-        refresh();
-      }
-    },
-    [refresh],
-  );
+  const post = async (body: Record<string, unknown>) => {
+    const res = await fetch('/api/meal-plan', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      setError((await res.json().catch(() => ({}))).error || 'Could not update the plan.');
+      refresh();
+    }
+  };
 
-  const remove = useCallback(async (day: Day) => {
-    setPlan((p) => ({ ...p, [day]: null }));
+  const assignRecipe = useCallback(async (day: Day, entry: PlanEntry) => {
+    setPlan((p) => ({ ...p, [day]: { ...p[day], recipe: entry } }));
+    await post({ day, recipe_slug: entry.slug });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const removeRecipe = useCallback(async (day: Day) => {
+    setPlan((p) => ({ ...p, [day]: { ...p[day], recipe: null } }));
+    await post({ day, recipe_slug: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const setNote = useCallback(async (day: Day, note: string) => {
+    setPlan((p) => ({ ...p, [day]: { ...p[day], note } }));
+    await post({ day, note });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const clearDay = useCallback(async (day: Day) => {
+    setPlan((p) => ({ ...p, [day]: emptyDay() }));
     await fetch(`/api/meal-plan?day=${day}`, { method: 'DELETE' });
   }, []);
 
   const clear = useCallback(async () => {
-    setPlan(EMPTY);
+    setPlan(emptyPlan());
     await fetch('/api/meal-plan?all=1', { method: 'DELETE' });
   }, []);
 
-  return { plan, loading, error, refresh, assign, remove, clear };
+  return { plan, loading, error, refresh, assignRecipe, removeRecipe, setNote, clearDay, clear };
 }

@@ -827,6 +827,107 @@ tr.hot td.ing {
   font-size: 11px;
   padding: 4px 9px;
 }
+.day-note {
+  width: 100%;
+  margin-top: 10px;
+  font-family: 'Instrument Sans', system-ui, sans-serif;
+  font-size: 13.5px;
+  line-height: 1.4;
+  border: 1.5px dashed var(--rule);
+  background: var(--card);
+  color: var(--ink);
+  padding: 7px 9px;
+  resize: vertical;
+}
+.day-note::placeholder {
+  color: var(--ink-soft);
+  opacity: 0.7;
+}
+.day-note:focus-visible {
+  outline: 2px solid var(--turmeric);
+  outline-offset: 1px;
+  border-style: solid;
+}
+
+/* ---------- shopping list ---------- */
+.shop-from {
+  font-family: 'Space Mono', monospace;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  margin: 0 0 22px;
+}
+.shop-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 2px solid var(--rule);
+  background: var(--card);
+}
+.shop-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--card-border, #e8e4dc);
+  border-bottom: 1px solid rgba(27, 34, 28, 0.12);
+  cursor: pointer;
+}
+.shop-item:last-child {
+  border-bottom: 0;
+}
+.shop-item:hover {
+  background: var(--kale-wash);
+}
+.shop-check {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--rule);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  margin-top: 1px;
+}
+.shop-check.on {
+  background: var(--kale);
+  border-color: var(--kale);
+  color: #fff;
+}
+.shop-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.shop-name {
+  font-size: 15px;
+  line-height: 1.35;
+}
+.shop-name .q {
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.shop-name .note {
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+.shop-src {
+  font-family: 'Space Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--turmeric);
+}
+.shop-item.off .shop-name {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+.shop-item.off .shop-src {
+  opacity: 0.4;
+}
 
 /* ---------- recipe picker modal ---------- */
 .picker-overlay {
