@@ -102,6 +102,16 @@ create table if not exists public.meal_plan (
 -- RLS on, no public policies: all access flows through the serverless functions.
 alter table public.meal_plan enable row level security;
 
+-- Cook notes: a timestamped log per recipe ("added more garlic, +5 min").
+create table if not exists public.cook_notes (
+  id          uuid primary key default gen_random_uuid(),
+  recipe_slug text not null references public.recipes(slug) on delete cascade,
+  body        text not null,
+  created_at  timestamptz default now()
+);
+create index if not exists cook_notes_slug_idx on public.cook_notes(recipe_slug, created_at desc);
+alter table public.cook_notes enable row level security;
+
 -- If you created meal_plan from an earlier version, run these to bring it up to
 -- date. Safe to run more than once.
 alter table public.meal_plan alter column recipe_slug drop not null;
