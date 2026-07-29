@@ -13,6 +13,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 const anthropic = new Anthropic();
 const MODEL = 'claude-sonnet-5';
 
+// Give the function room for a page fetch plus up to two Claude calls (the
+// default 10s limit times out on long recipes and returns an empty 500).
+export const config = { maxDuration: 60 };
+
 /* ---------- schema the renderer expects ---------- */
 const SCHEMA_DOC = `{
   "title": string,
@@ -151,7 +155,7 @@ function validateRecipe(r: any): string | null {
 async function convert(sourceLabel: string, material: string): Promise<any> {
   const message = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 4000,
+    max_tokens: 8192,
     system: `You convert recipes into a strict JSON schema for a Cooking for
 Engineers-style tabular renderer, where ingredients are tree leaves and each
 step merges its inputs.\n\nSchema:\n${SCHEMA_DOC}\n\n${RULES}`,
@@ -163,7 +167,13 @@ step merges its inputs.\n\nSchema:\n${SCHEMA_DOC}\n\n${RULES}`,
     .join('\n')
     .replace(/```json|```/g, '')
     .trim();
-  return JSON.parse(text);
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(
+      'The model returned malformed JSON (the recipe may be unusually long). Try again, or paste the recipe text directly.',
+    );
+  }
 }
 
 /* ---------- handler ---------- */
@@ -177,17 +187,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let extractedFrom = 'pasted text';
 
     if (url) {
-      const page = await fetch(url, {
-        headers: {
-          // some blogs 403 the default fetch UA; a browser UA usually passes
-          'user-agent':
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
-          accept: 'text/html',
-        },
-      });
+      // Fail fast if the page hangs (paywalled/bot-blocking sites often stall)
+      // so the request returns a clean message instead of timing out.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 9000);
+      let page: Response;
+      try {
+        page = await fetch(url, {
+          headers: {
+            // some blogs 403 the default fetch UA; a browser UA usually passes
+            'user-agent':
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+            accept: 'text/html',
+          },
+          signal: controller.signal,
+        });
+      } catch {
+        return res.status(422).json({
+          error:
+            "Couldn't reach that page — it may be slow, paywalled, or blocking automated requests (NYT Cooking, some Cloudflare sites). Paste the recipe text instead.",
+        });
+      } finally {
+        clearTimeout(timer);
+      }
       if (!page.ok) {
         return res.status(422).json({
-          error: `Couldn't fetch that page (HTTP ${page.status}). Paste the recipe text instead.`,
+          error: `Couldn't fetch that page (HTTP ${page.status}) — likely paywalled or blocking bots. Paste the recipe text instead.`,
         });
       }
       const html = await page.text();

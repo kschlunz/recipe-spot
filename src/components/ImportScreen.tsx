@@ -40,8 +40,21 @@ export default function ImportScreen() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(url.trim() ? { url: url.trim() } : { text: text.trim() }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      // Read as text first — a timed-out or crashed function returns an empty
+      // or HTML body that res.json() would choke on ("Unexpected end of JSON").
+      const raw = await res.text();
+      let json: { recipe?: Recipe; source?: string | null; extractedFrom?: string; error?: string } = {};
+      try {
+        json = raw ? JSON.parse(raw) : {};
+      } catch {
+        json = {};
+      }
+      if (!res.ok || !json.recipe) {
+        throw new Error(
+          json.error ||
+            `Import failed (HTTP ${res.status}). If the site is paywalled or blocking bots, paste the recipe text instead.`,
+        );
+      }
       setDraft(json.recipe);
       setSource(json.source ?? null);
       setExtractedFrom(json.extractedFrom ?? '');
