@@ -1380,6 +1380,11 @@ tr.hot td.ing {
 .rp-actions button {
   font-size: 12px;
 }
+.rp-actions button.cookmode.on {
+  background: var(--kale);
+  border-color: var(--kale);
+  color: #fff;
+}
 .rp-actions button.danger {
   color: #9a3412;
   border-color: #9a3412;

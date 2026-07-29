@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import RecipeView from './RecipeView';
 import CookNotes from './CookNotes';
 import { useRecipe } from '../hooks/useRecipes';
+import { useWakeLock } from '../hooks/useWakeLock';
 import { buildGrid } from '../lib/recipeGrid';
 import { effectiveTags } from '../lib/tags';
 import { fileToResizedBase64 } from '../lib/image';
@@ -136,6 +137,7 @@ export default function RecipePage({ slug }: { slug: string }) {
   const [busy, setBusy] = useState(false);
   const [actionErr, setActionErr] = useState('');
   const photoRef = useRef<HTMLInputElement>(null);
+  const wake = useWakeLock();
 
   const uploadPhoto = async (file: File) => {
     setBusy(true);
@@ -229,6 +231,15 @@ export default function RecipePage({ slug }: { slug: string }) {
               ))}
             </div>
             <div className="rp-actions">
+                {wake.supported && (
+                  <button
+                    className={'cookmode' + (wake.active ? ' on' : '')}
+                    onClick={wake.toggle}
+                    title="Keep the screen from dimming or locking while you cook"
+                  >
+                    {wake.active ? '🔆 Screen staying on' : '🌙 Keep screen on'}
+                  </button>
+                )}
                 <button onClick={() => window.print()}>Print</button>
                 {editable && (
                   <>
