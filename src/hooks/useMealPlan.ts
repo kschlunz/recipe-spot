@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useRefreshOnFocus } from './useRefreshOnFocus';
 
 export const DAYS = [
   { key: 'mon', label: 'Monday' },
@@ -36,8 +37,8 @@ export function useMealPlan() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  const refresh = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const res = await fetch('/api/meal-plan');
@@ -54,6 +55,7 @@ export function useMealPlan() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+  useRefreshOnFocus(() => refresh(true));
 
   const post = async (body: Record<string, unknown>) => {
     const res = await fetch('/api/meal-plan', {

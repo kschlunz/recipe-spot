@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Recipe, RecipeSummary } from '../data/recipe';
+import { useRefreshOnFocus } from './useRefreshOnFocus';
 
 // List all recipe card summaries from /api/recipes.
 export function useRecipeList() {
@@ -7,8 +8,8 @@ export function useRecipeList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  const refresh = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const res = await fetch('/api/recipes');
@@ -25,6 +26,7 @@ export function useRecipeList() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+  useRefreshOnFocus(() => refresh(true));
 
   return { recipes, loading, error, refresh };
 }

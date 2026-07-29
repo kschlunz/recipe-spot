@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { frac } from '../lib/recipeGrid';
+import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
 
 type Amount = { q: number; u: string };
 type Item = {
@@ -33,25 +34,36 @@ export default function ShoppingScreen() {
   const [checked, setChecked] = useState<Set<string>>(() => new Set());
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    let alive = true;
-    fetch('/api/shopping')
-      .then(async (res) => {
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((json) => {
-        if (!alive) return;
-        setItems(json.items ?? []);
-        setNoteItems(json.noteItems ?? []);
-        setRecipes(json.recipes ?? []);
-      })
-      .catch((e) => alive && setError((e as Error).message))
-      .finally(() => alive && setLoading(false));
-    return () => {
-      alive = false;
-    };
+  // Pull the list and the shared checkmarks together. Silent (no spinner) so a
+  // focus-refresh doesn't flash "Building your list…" every time you return.
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const [shopRes, checkRes] = await Promise.all([
+        fetch('/api/shopping'),
+        fetch('/api/shopping-checks'),
+      ]);
+      if (!shopRes.ok) throw new Error((await shopRes.json().catch(() => ({}))).error || `HTTP ${shopRes.status}`);
+      const json = await shopRes.json();
+      setItems(json.items ?? []);
+      setNoteItems(json.noteItems ?? []);
+      setRecipes(json.recipes ?? []);
+      setError(null);
+      if (checkRes.ok) {
+        const cj = await checkRes.json().catch(() => ({}));
+        if (Array.isArray(cj.checked)) setChecked(new Set(cj.checked));
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+  useRefreshOnFocus(() => load(true));
 
   const allItems = useMemo(() => [...items, ...noteItems], [items, noteItems]);
   const remaining = useMemo(
@@ -59,14 +71,34 @@ export default function ShoppingScreen() {
     [allItems, checked],
   );
 
+  // Toggle optimistically, then persist to the shared list. On failure, reload
+  // so we don't drift from what the other phone sees.
   const toggle = (it: Item) => {
     const k = keyOf(it);
+    const willCheck = !checked.has(k);
     setChecked((prev) => {
       const next = new Set(prev);
-      if (next.has(k)) next.delete(k);
-      else next.add(k);
+      if (willCheck) next.add(k);
+      else next.delete(k);
       return next;
     });
+    const req = willCheck
+      ? fetch('/api/shopping-checks', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ key: k }),
+        })
+      : fetch(`/api/shopping-checks?key=${encodeURIComponent(k)}`, { method: 'DELETE' });
+    req.then((r) => {
+      if (!r.ok) load(true);
+    }).catch(() => load(true));
+  };
+
+  const uncheckAll = () => {
+    setChecked(new Set());
+    fetch('/api/shopping-checks?all=1', { method: 'DELETE' }).then((r) => {
+      if (!r.ok) load(true);
+    }).catch(() => load(true));
   };
 
   const copyList = () => {
@@ -126,6 +158,7 @@ export default function ShoppingScreen() {
               {remaining} to buy
             </span>
             <button onClick={copyList}>{copied ? 'Copied ✓' : 'Copy list'}</button>
+            {checked.size > 0 && <button onClick={uncheckAll}>Uncheck all</button>}
           </div>
         )}
       </div>
@@ -147,9 +180,10 @@ export default function ShoppingScreen() {
         <>
           <p className="shop-tip">
             Rolled up from your planned recipes and any day notes (like "grill chicken and veggies") —
-            "leftovers" and "eat out" are skipped. Tick off what you already have; <b>Copy list</b> copies
-            only what's left. Pasting into Apple Notes? Paste, then select all and tap the checklist button
-            to make them tickable.
+            "leftovers" and "eat out" are skipped. Tick off what you already have — checkmarks are
+            <b> shared</b>, so you both see the same list while shopping. <b>Copy list</b> copies only
+            what's left. Pasting into Apple Notes? Paste, then select all and tap the checklist button to
+            make them tickable.
           </p>
           {items.length > 0 && <ul className="shop-list">{items.map(renderItem)}</ul>}
 
