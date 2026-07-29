@@ -39,8 +39,8 @@ function TopBar({ active }: { active: Route['name'] }) {
         <a href="#/shopping" className={'navlink' + (active === 'shopping' ? ' on' : '')}>
           Shopping
         </a>
-        <a href="#/new" className="navlink">
-          + Import
+        <a href="#/new" className={'navlink' + (active === 'new' ? ' on' : '')}>
+          + Add
         </a>
       </div>
     </div>
