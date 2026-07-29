@@ -2,21 +2,24 @@ import { useEffect, useState } from 'react';
 import IndexScreen from './components/IndexScreen';
 import ImportScreen from './components/ImportScreen';
 import RecipePage from './components/RecipePage';
+import PlanScreen from './components/PlanScreen';
 
 type Route =
   | { name: 'index' }
   | { name: 'new' }
+  | { name: 'plan' }
   | { name: 'recipe'; slug: string };
 
 function parseRoute(): Route {
   const hash = window.location.hash.replace(/^#/, '');
   if (hash === '/new') return { name: 'new' };
+  if (hash === '/plan') return { name: 'plan' };
   const m = hash.match(/^\/r\/([^/]+)/);
   if (m) return { name: 'recipe', slug: decodeURIComponent(m[1]) };
   return { name: 'index' };
 }
 
-function TopBar() {
+function TopBar({ active }: { active: Route['name'] }) {
   return (
     <div className="topbar">
       <div className="topbar-inner">
@@ -24,6 +27,12 @@ function TopBar() {
           Recipe<span className="dot">.</span>Spot
         </a>
         <span className="topbar-spacer" />
+        <a href="#/" className={'navlink' + (active === 'index' ? ' on' : '')}>
+          Recipes
+        </a>
+        <a href="#/plan" className={'navlink' + (active === 'plan' ? ' on' : '')}>
+          This Week
+        </a>
         <a href="#/new" className="navlink">
           + Import
         </a>
@@ -46,9 +55,10 @@ export default function App() {
 
   return (
     <>
-      <TopBar />
+      <TopBar active={route.name} />
       {route.name === 'index' && <IndexScreen />}
       {route.name === 'new' && <ImportScreen />}
+      {route.name === 'plan' && <PlanScreen />}
       {route.name === 'recipe' && <RecipePage slug={route.slug} />}
     </>
   );

@@ -32,32 +32,42 @@ export function useRecipeList() {
 // Fetch a single recipe by slug from /api/recipes?slug=.
 export function useRecipe(slug: string) {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
+  const [tags, setTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    setError(null);
-    setRecipe(null);
-    fetch(`/api/recipes?slug=${encodeURIComponent(slug)}`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error((await res.json()).error || `HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((json) => {
-        if (alive) setRecipe(json.recipe?.data ?? null);
-      })
-      .catch((e) => {
-        if (alive) setError((e as Error).message);
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [slug]);
+  const load = useCallback(
+    async (alive: () => boolean) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`/api/recipes?slug=${encodeURIComponent(slug)}`);
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+        const json = await res.json();
+        if (alive()) {
+          setRecipe(json.recipe?.data ?? null);
+          setTags(json.recipe?.tags ?? []);
+        }
+      } catch (e) {
+        if (alive()) setError((e as Error).message);
+      } finally {
+        if (alive()) setLoading(false);
+      }
+    },
+    [slug],
+  );
 
-  return { recipe, loading, error };
+  useEffect(() => {
+    let on = true;
+    setRecipe(null);
+    setTags([]);
+    load(() => on);
+    return () => {
+      on = false;
+    };
+  }, [load]);
+
+  const refresh = useCallback(() => load(() => true), [load]);
+
+  return { recipe, tags, loading, error, refresh };
 }

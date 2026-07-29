@@ -87,3 +87,14 @@ values (
   }'::jsonb
 )
 on conflict (slug) do nothing;
+
+-- Weekly meal plan: one recipe per day, persistent until cleared.
+-- (Run this block too if you already created the recipes table earlier.)
+create table if not exists public.meal_plan (
+  day         text primary key check (day in ('mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun')),
+  recipe_slug text not null references public.recipes(slug) on delete cascade,
+  updated_at  timestamptz default now()
+);
+
+-- RLS on, no public policies: all access flows through the serverless functions.
+alter table public.meal_plan enable row level security;
