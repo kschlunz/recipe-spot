@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import RecipeView from './RecipeView';
 import { buildGrid } from '../lib/recipeGrid';
+import { fileToResizedBase64 } from '../lib/image';
 import type { Recipe } from '../data/recipe';
 
 // The import flow: paste a URL or text → Claude structures it → preview in the
@@ -24,21 +25,18 @@ export default function ImportScreen() {
   const [jsonErr, setJsonErr] = useState('');
 
   const [saving, setSaving] = useState(false);
+  const photoRef = useRef<HTMLInputElement>(null);
 
-  const runImport = async () => {
-    if (!url.trim() && !text.trim()) {
-      setError('Paste a URL or some recipe text first.');
-      return;
-    }
+  const sendImport = async (body: Record<string, unknown>, statusMsg: string) => {
     setImporting(true);
     setError(null);
-    setStatus('Reading the recipe…');
+    setStatus(statusMsg);
     setDraft(null);
     try {
       const res = await fetch('/api/import-recipe', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(url.trim() ? { url: url.trim() } : { text: text.trim() }),
+        body: JSON.stringify(body),
       });
       // Read as text first — a timed-out or crashed function returns an empty
       // or HTML body that res.json() would choke on ("Unexpected end of JSON").
@@ -68,6 +66,30 @@ export default function ImportScreen() {
       setStatus(null);
     } finally {
       setImporting(false);
+    }
+  };
+
+  const runImport = () => {
+    if (!url.trim() && !text.trim()) {
+      setError('Paste a URL or some recipe text first.');
+      return;
+    }
+    sendImport(url.trim() ? { url: url.trim() } : { text: text.trim() }, 'Reading the recipe…');
+  };
+
+  const importPhoto = async (file: File) => {
+    setError(null);
+    setStatus('Reading the photo…');
+    setImporting(true);
+    try {
+      const { base64, mediaType } = await fileToResizedBase64(file);
+      await sendImport({ image: base64, imageMediaType: mediaType }, 'Reading the photo…');
+    } catch (e) {
+      setError((e as Error).message);
+      setStatus(null);
+      setImporting(false);
+    } finally {
+      if (photoRef.current) photoRef.current.value = '';
     }
   };
 
@@ -154,7 +176,25 @@ export default function ImportScreen() {
               <button className="go" onClick={runImport} disabled={importing}>
                 {importing ? 'Importing…' : 'Import'}
               </button>
+              <button type="button" onClick={() => photoRef.current?.click()} disabled={importing}>
+                📷 Snap / upload a photo
+              </button>
+              <input
+                ref={photoRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) importPhoto(f);
+                }}
+              />
             </div>
+            <p className="import-hint">
+              Photo works for a cookbook page, a handwritten card, or a screenshot of a reel — Claude
+              reads the recipe right off the image.
+            </p>
             {status && <p className="status-line">{status}</p>}
             {error && <p className="status-line err">{error}</p>}
           </div>

@@ -56,6 +56,7 @@ export type RecipeSummary = {
   eyebrow?: string;
   tagline?: string;
   tags: string[];
+  photoUrl?: string | null;
 };
 
 /* ------------------------------------------------------------------ */

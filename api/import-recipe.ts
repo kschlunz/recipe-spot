@@ -191,14 +191,28 @@ function validateRecipe(r: any): string | null {
 }
 
 /* ---------- Claude call ---------- */
-async function convert(sourceLabel: string, material: string): Promise<any> {
+type ImageInput = { mediaType: string; data: string };
+
+async function convert(sourceLabel: string, material: string, image?: ImageInput): Promise<any> {
+  const content: Anthropic.ContentBlockParam[] = [];
+  if (image) {
+    content.push({
+      type: 'image',
+      source: { type: 'base64', media_type: image.mediaType as any, data: image.data },
+    });
+  }
+  content.push({
+    type: 'text',
+    text: `Source (${sourceLabel}):\n\n${material || 'Read the recipe from the attached photo.'}`,
+  });
+
   const message = await anthropic.messages.create({
     model: MODEL,
     max_tokens: 8192,
     system: `You convert recipes into a strict JSON schema for a Cooking for
 Engineers-style tabular renderer, where ingredients are tree leaves and each
 step merges its inputs.\n\nSchema:\n${SCHEMA_DOC}\n\n${RULES}`,
-    messages: [{ role: 'user', content: `Source (${sourceLabel}):\n\n${material}` }],
+    messages: [{ role: 'user', content }],
   });
   const text = message.content
     .filter((b): b is Anthropic.TextBlock => b.type === 'text')
@@ -218,14 +232,19 @@ step merges its inputs.\n\nSchema:\n${SCHEMA_DOC}\n\n${RULES}`,
 /* ---------- handler ---------- */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
-  const { url, text } = req.body ?? {};
-  if (!url && !text) return res.status(400).json({ error: 'Provide url or text.' });
+  const { url, text, image, imageMediaType } = req.body ?? {};
+  if (!url && !text && !image) return res.status(400).json({ error: 'Provide url, text, or image.' });
 
   try {
     let material = text as string | undefined;
     let extractedFrom = 'pasted text';
+    let img: ImageInput | undefined;
 
-    if (url) {
+    if (image) {
+      extractedFrom = 'photo';
+      material = '';
+      img = { mediaType: typeof imageMediaType === 'string' ? imageMediaType : 'image/jpeg', data: image };
+    } else if (url) {
       // Fail fast if the page hangs (paywalled/bot-blocking sites often stall)
       // so the request returns a clean message instead of timing out.
       const controller = new AbortController();
@@ -288,9 +307,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    let recipe = await convert(extractedFrom, material!);
+    let recipe = await convert(extractedFrom, material ?? '', img);
 
-    // one repair pass if the tree is invalid
+    // one repair pass if the tree is invalid (text-only — the model already
+    // read the photo, and it now just needs to fix the tree structure)
     let problem = validateRecipe(recipe);
     if (problem) {
       recipe = await convert(

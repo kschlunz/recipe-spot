@@ -17,6 +17,20 @@ create table if not exists public.recipes (
 create index if not exists recipes_title_idx
   on public.recipes using gin (to_tsvector('simple', title));
 
+-- Optional dish photo per recipe (uploaded to the recipe-photos bucket below).
+alter table public.recipes add column if not exists photo_url text;
+
+-- Public storage bucket for dish photos. Uploads happen through the serverless
+-- functions with the service-role key; reads are public.
+insert into storage.buckets (id, name, public)
+values ('recipe-photos', 'recipe-photos', true)
+on conflict (id) do nothing;
+
+drop policy if exists "Public read recipe photos" on storage.objects;
+create policy "Public read recipe photos" on storage.objects
+  for select to anon, authenticated
+  using (bucket_id = 'recipe-photos');
+
 -- Row level security: enabled with NO public policies. The anon/authenticated
 -- browser client cannot read or write; only the service-role key (used by the
 -- serverless functions) bypasses RLS.
