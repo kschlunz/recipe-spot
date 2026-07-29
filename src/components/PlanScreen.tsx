@@ -84,7 +84,7 @@ function DayNote({ value, onSave }: { value: string; onSave: (v: string) => void
 }
 
 export default function PlanScreen() {
-  const { plan, loading, error, assignRecipe, removeRecipe, setNote, clear } = useMealPlan();
+  const { plan, loading, error, assignRecipe, removeRecipe, setNote, setServings, clear } = useMealPlan();
   const [picking, setPicking] = useState<Day | null>(null);
 
   const filled = DAYS.filter((d) => plan[d.key].recipe || plan[d.key].note.trim()).length;
@@ -123,7 +123,8 @@ export default function PlanScreen() {
 
       <div className="week-grid">
         {DAYS.map((d) => {
-          const { recipe, note } = plan[d.key];
+          const { recipe, note, servings } = plan[d.key];
+          const serves = servings ?? recipe?.serves ?? 4;
           return (
             <div key={d.key} className={'day-card' + (recipe || note.trim() ? ' has' : '')}>
               <div className="day-label">{d.label}</div>
@@ -134,6 +135,24 @@ export default function PlanScreen() {
                     {recipe.eyebrow && <span className="eyebrow">{recipe.eyebrow}</span>}
                     <b>{recipe.title}</b>
                   </a>
+                  <div className="day-serves">
+                    <span>Serves</span>
+                    <button
+                      className="step"
+                      aria-label="Fewer servings"
+                      onClick={() => setServings(d.key, Math.max(1, serves - 1))}
+                    >
+                      −
+                    </button>
+                    <b>{serves}</b>
+                    <button
+                      className="step"
+                      aria-label="More servings"
+                      onClick={() => setServings(d.key, serves + 1)}
+                    >
+                      +
+                    </button>
+                  </div>
                   <div className="day-actions">
                     <button onClick={() => setPicking(d.key)}>Change</button>
                     <button onClick={() => removeRecipe(d.key)}>Remove</button>
