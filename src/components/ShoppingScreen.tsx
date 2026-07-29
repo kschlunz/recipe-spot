@@ -1,15 +1,28 @@
 import { useEffect, useMemo, useState } from 'react';
 import { frac } from '../lib/recipeGrid';
 
+type Amount = { q: number; u: string };
 type Item = {
   name: string;
   note: string;
-  us: { q: number; u: string } | null;
+  amounts: Amount[];
+  toTaste: boolean;
   sources: string[];
 };
 
-const keyOf = (it: Item) => it.name + '|' + (it.us ? it.us.u : '');
-const qtyText = (it: Item) => (it.us ? `${frac(it.us.q)} ${it.us.u} ` : '');
+const keyOf = (it: Item) => it.name.toLowerCase();
+const measured = (it: Item) =>
+  it.amounts
+    .map((a) => `${frac(a.q)} ${a.u}`.trim())
+    .filter(Boolean)
+    .join(' + ');
+
+// A plain-text line for copy/paste ("2 cans chickpeas — drained").
+const lineOf = (it: Item) => {
+  const m = measured(it);
+  const head = (m ? m + ' ' : '') + it.name + (!m && it.toTaste ? ' (to taste)' : '');
+  return head + (it.note ? ` — ${it.note}` : '');
+};
 
 export default function ShoppingScreen() {
   const [items, setItems] = useState<Item[]>([]);
@@ -53,12 +66,12 @@ export default function ShoppingScreen() {
   const copyList = () => {
     const text = items
       .filter((it) => !checked.has(keyOf(it)))
-      .map((it) => qtyText(it) + it.name + (it.note ? ` (${it.note})` : ''))
+      .map(lineOf)
       .join('\n');
     navigator.clipboard.writeText(text).then(
       () => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
+        setTimeout(() => setCopied(false), 1600);
       },
       () => {},
     );
@@ -89,11 +102,7 @@ export default function ShoppingScreen() {
         )}
       </div>
 
-      {recipes.length > 0 && (
-        <p className="shop-from">
-          From this week: {recipes.join(' · ')}
-        </p>
-      )}
+      {recipes.length > 0 && <p className="shop-from">From this week: {recipes.join(' · ')}</p>}
 
       {loading ? (
         <p className="loading">Building your list…</p>
@@ -101,32 +110,41 @@ export default function ShoppingScreen() {
         <p className="status-line err">{error}</p>
       ) : items.length === 0 ? (
         <div className="empty">
-          Nothing planned with a recipe yet. <a href="#/plan" style={{ color: 'var(--turmeric)' }}>Plan your week →</a>
+          Nothing planned with a recipe yet.{' '}
+          <a href="#/plan" style={{ color: 'var(--turmeric)' }}>
+            Plan your week →
+          </a>
         </div>
       ) : (
-        <ul className="shop-list">
-          {items.map((it) => {
-            const k = keyOf(it);
-            const on = checked.has(k);
-            return (
-              <li key={k} className={'shop-item' + (on ? ' off' : '')} onClick={() => toggle(it)}>
-                <span className={'shop-check' + (on ? ' on' : '')} aria-hidden>
-                  {on ? '✓' : ''}
-                </span>
-                <span className="shop-body">
-                  <span className="shop-name">
-                    {it.us && <span className="q">{frac(it.us.q)} {it.us.u} </span>}
-                    {it.name}
-                    {it.note && <span className="note"> — {it.note}</span>}
+        <>
+          <p className="shop-tip">
+            Tick off what you already have — <b>Copy list</b> copies only what's left. Pasting into Apple
+            Notes? Paste, then select all and tap the checklist button to make them tickable.
+          </p>
+          <ul className="shop-list">
+            {items.map((it) => {
+              const k = keyOf(it);
+              const on = checked.has(k);
+              const m = measured(it);
+              return (
+                <li key={k} className={'shop-item' + (on ? ' off' : '')} onClick={() => toggle(it)}>
+                  <span className={'shop-check' + (on ? ' on' : '')} aria-hidden>
+                    {on ? '✓' : ''}
                   </span>
-                  {it.sources.length > 0 && (
-                    <span className="shop-src">{it.sources.join(' · ')}</span>
-                  )}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+                  <span className="shop-body">
+                    <span className="shop-name">
+                      {m && <span className="q">{m} </span>}
+                      {it.name}
+                      {!m && it.toTaste && <span className="note"> (to taste)</span>}
+                      {it.note && <span className="note"> — {it.note}</span>}
+                    </span>
+                    {it.sources.length > 0 && <span className="shop-src">{it.sources.join(' · ')}</span>}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
     </div>
   );

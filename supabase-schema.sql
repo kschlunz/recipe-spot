@@ -95,16 +95,18 @@ create table if not exists public.meal_plan (
   day         text primary key check (day in ('mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun')),
   recipe_slug text references public.recipes(slug) on delete set null,
   note        text,
+  servings    integer,   -- target servings for that day; null = the recipe's own serves
   updated_at  timestamptz default now()
 );
 
 -- RLS on, no public policies: all access flows through the serverless functions.
 alter table public.meal_plan enable row level security;
 
--- If you created meal_plan from an earlier version (recipe_slug NOT NULL, no
--- note column), run these to bring it up to date. Safe to run more than once.
+-- If you created meal_plan from an earlier version, run these to bring it up to
+-- date. Safe to run more than once.
 alter table public.meal_plan alter column recipe_slug drop not null;
 alter table public.meal_plan add column if not exists note text;
+alter table public.meal_plan add column if not exists servings integer;
 alter table public.meal_plan drop constraint if exists meal_plan_recipe_slug_fkey;
 alter table public.meal_plan add constraint meal_plan_recipe_slug_fkey
   foreign key (recipe_slug) references public.recipes(slug) on delete set null;

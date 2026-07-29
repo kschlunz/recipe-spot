@@ -26,11 +26,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!supabase) return;
 
   if (req.method === 'GET') {
-    type Entry = { recipe: { slug: string; title: string; eyebrow?: string; tagline?: string } | null; note: string };
+    type Entry = {
+      recipe: { slug: string; title: string; eyebrow?: string; tagline?: string; serves?: number } | null;
+      note: string;
+      servings: number | null;
+    };
     const plan: Record<string, Entry> = {};
-    DAYS.forEach((d) => (plan[d] = { recipe: null, note: '' }));
+    DAYS.forEach((d) => (plan[d] = { recipe: null, note: '', servings: null }));
 
-    const { data: rows, error } = await supabase.from('meal_plan').select('day, recipe_slug, note');
+    const { data: rows, error } = await supabase.from('meal_plan').select('day, recipe_slug, note, servings');
     if (error) return res.status(500).json({ error: error.message });
 
     const slugs = [...new Set((rows ?? []).filter((r: any) => r.recipe_slug).map((r: any) => r.recipe_slug))];
@@ -48,9 +52,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const entry = plan[(row as any).day];
       if (!entry) continue;
       entry.note = (row as any).note ?? '';
+      entry.servings = (row as any).servings ?? null;
       const r = (row as any).recipe_slug ? bySlug.get((row as any).recipe_slug) : null;
       if (r) {
-        entry.recipe = { slug: r.slug, title: r.title, eyebrow: r.data?.eyebrow ?? '', tagline: r.data?.tagline ?? '' };
+        entry.recipe = {
+          slug: r.slug,
+          title: r.title,
+          eyebrow: r.data?.eyebrow ?? '',
+          tagline: r.data?.tagline ?? '',
+          serves: Number(r.data?.serves) || undefined,
+        };
       }
     }
     res.setHeader('Cache-Control', 'no-store');
@@ -67,7 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Merge with the existing row so setting a recipe doesn't wipe the note (or vice versa).
     const { data: existing } = await supabase
       .from('meal_plan')
-      .select('recipe_slug, note')
+      .select('recipe_slug, note, servings')
       .eq('day', day)
       .maybeSingle();
 
@@ -75,6 +86,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       'recipe_slug' in body ? body.recipe_slug || null : (existing?.recipe_slug ?? null);
     const note =
       'note' in body ? (typeof body.note === 'string' ? body.note.trim() : '') : (existing?.note ?? '');
+    const servings =
+      'servings' in body
+        ? body.servings == null
+          ? null
+          : Math.max(1, Math.round(Number(body.servings) || 0)) || null
+        : ((existing as any)?.servings ?? null);
 
     if (!recipe_slug && !note) {
       const { error } = await supabase.from('meal_plan').delete().eq('day', day);
@@ -82,9 +99,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ ok: true });
     }
 
-    const { error } = await supabase
-      .from('meal_plan')
-      .upsert({ day, recipe_slug, note: note || null, updated_at: new Date().toISOString() }, { onConflict: 'day' });
+    const { error } = await supabase.from('meal_plan').upsert(
+      { day, recipe_slug, note: note || null, servings: recipe_slug ? servings : null, updated_at: new Date().toISOString() },
+      { onConflict: 'day' },
+    );
     if (error) return res.status(500).json({ error: error.message });
     return res.status(200).json({ ok: true });
   }

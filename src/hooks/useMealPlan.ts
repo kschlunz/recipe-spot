@@ -12,11 +12,11 @@ export const DAYS = [
 
 export type Day = (typeof DAYS)[number]['key'];
 
-export type PlanEntry = { slug: string; title: string; eyebrow?: string; tagline?: string };
-export type DayPlan = { recipe: PlanEntry | null; note: string };
+export type PlanEntry = { slug: string; title: string; eyebrow?: string; tagline?: string; serves?: number };
+export type DayPlan = { recipe: PlanEntry | null; note: string; servings: number | null };
 export type Plan = Record<Day, DayPlan>;
 
-const emptyDay = (): DayPlan => ({ recipe: null, note: '' });
+const emptyDay = (): DayPlan => ({ recipe: null, note: '', servings: null });
 const emptyPlan = (): Plan => ({
   mon: emptyDay(),
   tue: emptyDay(),
@@ -64,14 +64,21 @@ export function useMealPlan() {
   };
 
   const assignRecipe = useCallback(async (day: Day, entry: PlanEntry) => {
-    setPlan((p) => ({ ...p, [day]: { ...p[day], recipe: entry } }));
-    await post({ day, recipe_slug: entry.slug });
+    // reset servings to the new recipe's own default
+    setPlan((p) => ({ ...p, [day]: { ...p[day], recipe: entry, servings: null } }));
+    await post({ day, recipe_slug: entry.slug, servings: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const removeRecipe = useCallback(async (day: Day) => {
-    setPlan((p) => ({ ...p, [day]: { ...p[day], recipe: null } }));
+    setPlan((p) => ({ ...p, [day]: { ...p[day], recipe: null, servings: null } }));
     await post({ day, recipe_slug: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const setServings = useCallback(async (day: Day, servings: number) => {
+    setPlan((p) => ({ ...p, [day]: { ...p[day], servings } }));
+    await post({ day, servings });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -91,5 +98,5 @@ export function useMealPlan() {
     await fetch('/api/meal-plan?all=1', { method: 'DELETE' });
   }, []);
 
-  return { plan, loading, error, refresh, assignRecipe, removeRecipe, setNote, clearDay, clear };
+  return { plan, loading, error, refresh, assignRecipe, removeRecipe, setNote, setServings, clearDay, clear };
 }
