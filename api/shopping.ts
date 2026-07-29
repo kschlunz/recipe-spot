@@ -1,17 +1,30 @@
 // api/shopping.ts — roll up ingredients from the week's planned recipes into a
-// deduped, serving-scaled shopping list. GET only.
+// deduped, serving-scaled shopping list, plus groceries pulled from free-text
+// day notes ("Kate grills chicken and makes veggies"). GET only.
 //
 //   GET /api/shopping → { items: [{ name, note, amounts:[{q,u}], toTaste, sources }], recipes }
 //
 // Grouping: one line per ingredient NAME. Quantities are summed per unit, so
 // "1 cup" + "1 cup" → "2 cup", while mismatched units stay side by side
 // ("1 cup + 200 g") rather than being force-converted. Each planned day is
-// scaled by its chosen servings ÷ the recipe's own serves. A recipe planned on
-// two days is counted twice. "To taste" / garnish items (no quantity) are
-// flagged once.
+// scaled by its chosen servings ÷ the recipe's own serves.
+//
+// Notes: a day can also carry a free-text note. Notes that mean "no groceries"
+// (leftovers, eat out, takeout) are skipped; anything else is read by Claude,
+// which extracts the grocery items and folds them into the same list.
 
+import Anthropic from '@anthropic-ai/sdk';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+export const config = { maxDuration: 30 };
+
+const anthropic = new Anthropic();
+const NOTE_MODEL = 'claude-haiku-4-5';
+
+// Notes that obviously need nothing bought — skip before ever calling the model.
+const NOTE_SKIP =
+  /^(left ?overs?|eat(ing)? out|out to eat|dinner out|take[- ]?out|takeaway|order (in|out)|delivery|dining out|restaurant|fend for yourself|nothing|none|n\/a|tbd|\?+)\.?$/i;
 
 function client(res: VercelResponse): SupabaseClient | null {
   const url = process.env.SUPABASE_URL;
@@ -26,10 +39,39 @@ function client(res: VercelResponse): SupabaseClient | null {
 type Group = {
   name: string;
   note: string;
-  units: Map<string, number>; // unit → summed quantity
+  units: Map<string, number>;
   toTaste: boolean;
   sources: Set<string>;
 };
+
+async function groceriesFromNotes(notes: string[]): Promise<string[]> {
+  const usable = notes.map((n) => n.trim()).filter((n) => n && !NOTE_SKIP.test(n));
+  if (usable.length === 0 || !process.env.ANTHROPIC_API_KEY) return [];
+  try {
+    const msg = await anthropic.messages.create({
+      model: NOTE_MODEL,
+      max_tokens: 500,
+      system:
+        'You turn short weeknight dinner notes into a grocery shopping list. ' +
+        'You are given a numbered list of notes. For each note that describes a meal cooked at home, ' +
+        'output the grocery items needed to make it. Skip any note that means no shopping is needed ' +
+        '(leftovers, eating out, takeout, ordering in, a restaurant). Use simple lowercase ingredient ' +
+        'names, no quantities, no brands, no duplicates. Respond with ONLY a JSON array of strings ' +
+        '(e.g. ["chicken breasts","mixed vegetables"]). If nothing is needed, respond with [].',
+      messages: [{ role: 'user', content: usable.map((n, i) => `${i + 1}. ${n}`).join('\n') }],
+    });
+    const text = msg.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('')
+      .replace(/```json|```/g, '')
+      .trim();
+    const arr = JSON.parse(text);
+    return Array.isArray(arr) ? arr.filter((x) => typeof x === 'string' && x.trim()).map((s) => s.trim()) : [];
+  } catch {
+    return []; // best-effort — never let note parsing break the list
+  }
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
@@ -39,53 +81,69 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const supabase = client(res);
   if (!supabase) return;
 
-  const { data: rows, error } = await supabase.from('meal_plan').select('recipe_slug, servings');
+  const { data: rows, error } = await supabase.from('meal_plan').select('recipe_slug, servings, note');
   if (error) return res.status(500).json({ error: error.message });
 
   const planned = (rows ?? []).filter((r: any) => r.recipe_slug);
-  if (planned.length === 0) return res.status(200).json({ items: [], recipes: [] });
-
-  const slugs = [...new Set(planned.map((r: any) => r.recipe_slug))];
-  const { data: recipes, error: rErr } = await supabase
-    .from('recipes')
-    .select('slug, title, data')
-    .in('slug', slugs);
-  if (rErr) return res.status(500).json({ error: rErr.message });
-
-  const bySlug = new Map<string, any>();
-  (recipes ?? []).forEach((r: any) => bySlug.set(r.slug, r));
+  const notes = (rows ?? []).map((r: any) => r.note).filter((n: any): n is string => !!n);
 
   const groups = new Map<string, Group>();
   const recipeTitles = new Set<string>();
 
-  for (const row of planned) {
-    const r = bySlug.get((row as any).recipe_slug);
-    if (!r) continue;
-    const title = r.title as string;
-    recipeTitles.add(title);
+  // --- recipes ---
+  if (planned.length > 0) {
+    const slugs = [...new Set(planned.map((r: any) => r.recipe_slug))];
+    const { data: recipes, error: rErr } = await supabase
+      .from('recipes')
+      .select('slug, title, data')
+      .in('slug', slugs);
+    if (rErr) return res.status(500).json({ error: rErr.message });
 
-    const base = Number(r.data?.serves) || 0;
-    const target = (row as any).servings ? Number((row as any).servings) : 0;
-    const scale = base && target ? target / base : 1;
+    const bySlug = new Map<string, any>();
+    (recipes ?? []).forEach((r: any) => bySlug.set(r.slug, r));
 
-    for (const g of (r.data?.ingredients ?? []) as any[]) {
-      const name = String(g.name ?? '').trim();
-      if (!name) continue;
-      const key = name.toLowerCase();
-      let grp = groups.get(key);
-      if (!grp) {
-        grp = { name, note: g.note ?? '', units: new Map(), toTaste: false, sources: new Set() };
-        groups.set(key, grp);
-      }
-      grp.sources.add(title);
-      if (!grp.note && g.note) grp.note = g.note;
-      if (g.us && g.us.q) {
-        const u = String(g.us.u ?? '');
-        grp.units.set(u, (grp.units.get(u) ?? 0) + Number(g.us.q) * scale);
-      } else {
-        grp.toTaste = true;
+    for (const row of planned) {
+      const r = bySlug.get((row as any).recipe_slug);
+      if (!r) continue;
+      const title = r.title as string;
+      recipeTitles.add(title);
+      const base = Number(r.data?.serves) || 0;
+      const target = (row as any).servings ? Number((row as any).servings) : 0;
+      const scale = base && target ? target / base : 1;
+
+      for (const g of (r.data?.ingredients ?? []) as any[]) {
+        const name = String(g.name ?? '').trim();
+        if (!name) continue;
+        const key = name.toLowerCase();
+        let grp = groups.get(key);
+        if (!grp) {
+          grp = { name, note: g.note ?? '', units: new Map(), toTaste: false, sources: new Set() };
+          groups.set(key, grp);
+        }
+        grp.sources.add(title);
+        if (!grp.note && g.note) grp.note = g.note;
+        if (g.us && g.us.q) {
+          const u = String(g.us.u ?? '');
+          grp.units.set(u, (grp.units.get(u) ?? 0) + Number(g.us.q) * scale);
+        } else {
+          grp.toTaste = true;
+        }
       }
     }
+  }
+
+  // --- groceries extracted from day notes ---
+  const noteItems = await groceriesFromNotes(notes);
+  for (const raw of noteItems) {
+    const name = raw.trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    let grp = groups.get(key);
+    if (!grp) {
+      grp = { name, note: '', units: new Map(), toTaste: false, sources: new Set() };
+      groups.set(key, grp);
+    }
+    grp.sources.add('your notes');
   }
 
   const items = [...groups.values()]
