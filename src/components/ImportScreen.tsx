@@ -43,7 +43,8 @@ export default function ImportScreen() {
       // Read as text first — a timed-out or crashed function returns an empty
       // or HTML body that res.json() would choke on ("Unexpected end of JSON").
       const raw = await res.text();
-      let json: { recipe?: Recipe; source?: string | null; extractedFrom?: string; error?: string } = {};
+      let json: { recipe?: Recipe; source?: string | null; extractedFrom?: string; tags?: string[]; error?: string } =
+        {};
       try {
         json = raw ? JSON.parse(raw) : {};
       } catch {
@@ -58,6 +59,7 @@ export default function ImportScreen() {
       setDraft(json.recipe);
       setSource(json.source ?? null);
       setExtractedFrom(json.extractedFrom ?? '');
+      if (Array.isArray(json.tags) && json.tags.length) setTags(json.tags.join(', '));
       setJsonText(JSON.stringify(json.recipe, null, 2));
       setJsonErr('');
       setStatus(null);

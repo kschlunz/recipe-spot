@@ -41,6 +41,7 @@ const SCHEMA_DOC = `{
       "inputs": [string] }    // ingredient ids AND/OR earlier step ids
   ],
   "notes": [ { "h": string, "p": string } ],   // tips, storage, substitutions
+  "tags": [string],           // 3-6 short lowercase tags for browsing/filtering
   "credit": string
 }`;
 
@@ -65,7 +66,12 @@ const RULES = `Rules:
    bake, top, serve) that lists both step ids as its inputs. Example: a
    meatloaf has s_loaf (loaf ingredients), s_sauce (sauce ingredients only),
    then s_bake with inputs [s_loaf, s_sauce].
-7. Respond with ONLY the JSON object. No markdown fences, no preamble.`;
+7. tags: 3-6 short lowercase tags for browsing and filtering — meal type
+   (weeknight, dinner, breakfast), dietary (vegetarian, vegan, gluten-free),
+   cuisine (mexican, italian, thai), main ingredient (chicken, beans, pasta),
+   and method/effort (one-pot, sheet-pan, no-cook, make-ahead, slow-cooker).
+   Keep each to 1-2 words, generic enough that other recipes would share them.
+8. Respond with ONLY the JSON object. No markdown fences, no preamble.`;
 
 /* ---------- JSON-LD extraction ---------- */
 function findRecipeNode(node: any): any | null {
@@ -298,7 +304,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    return res.status(200).json({ recipe, source: url ?? null, extractedFrom });
+    // Tags live in their own column, not in the recipe tree — lift them out.
+    const tags = Array.isArray(recipe.tags)
+      ? recipe.tags.filter((t: any) => typeof t === 'string' && t.trim()).map((t: string) => t.trim().toLowerCase())
+      : [];
+    delete recipe.tags;
+
+    return res.status(200).json({ recipe, tags, source: url ?? null, extractedFrom });
   } catch (e: any) {
     return res.status(500).json({ error: e.message });
   }

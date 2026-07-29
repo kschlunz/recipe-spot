@@ -1,16 +1,18 @@
 import { useMemo, useState } from 'react';
 import { useRecipeList } from '../hooks/useRecipes';
 import type { RecipeSummary } from '../data/recipe';
+import { effectiveTags } from '../lib/tags';
 
 function RecipeCard({ r }: { r: RecipeSummary }) {
+  const tags = effectiveTags(r.tags, r.eyebrow);
   return (
     <a className="rcard" href={`#/r/${r.slug}`}>
       {r.eyebrow && <p className="eyebrow">{r.eyebrow}</p>}
       <h3>{r.title}</h3>
       {r.tagline && <p className="deck">{r.tagline}</p>}
-      {r.tags.length > 0 && (
+      {tags.length > 0 && (
         <div className="cardtags">
-          {r.tags.map((t) => (
+          {tags.map((t) => (
             <span key={t}>{t}</span>
           ))}
         </div>
@@ -26,20 +28,21 @@ export default function IndexScreen() {
 
   const allTags = useMemo(() => {
     const set = new Set<string>();
-    recipes.forEach((r) => r.tags.forEach((t) => set.add(t)));
+    recipes.forEach((r) => effectiveTags(r.tags, r.eyebrow).forEach((t) => set.add(t)));
     return [...set].sort();
   }, [recipes]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return recipes.filter((r) => {
-      if (activeTag && !r.tags.includes(activeTag)) return false;
+      const tags = effectiveTags(r.tags, r.eyebrow);
+      if (activeTag && !tags.includes(activeTag)) return false;
       if (!q) return true;
       return (
         r.title.toLowerCase().includes(q) ||
         (r.eyebrow ?? '').toLowerCase().includes(q) ||
         (r.tagline ?? '').toLowerCase().includes(q) ||
-        r.tags.some((t) => t.toLowerCase().includes(q))
+        tags.some((t) => t.toLowerCase().includes(q))
       );
     });
   }, [recipes, query, activeTag]);

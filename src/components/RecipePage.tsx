@@ -3,6 +3,7 @@ import RecipeView from './RecipeView';
 import CookNotes from './CookNotes';
 import { useRecipe } from '../hooks/useRecipes';
 import { buildGrid } from '../lib/recipeGrid';
+import { effectiveTags } from '../lib/tags';
 import { STEW, type Recipe } from '../data/recipe';
 import { DAYS, type Day } from '../hooks/useMealPlan';
 
@@ -187,7 +188,7 @@ export default function RecipePage({ slug }: { slug: string }) {
           {(tags.length > 0 || editable) && (
             <div className="rp-meta">
               <div className="rtags">
-                {tags.map((t) => (
+                {effectiveTags(tags, shown.eyebrow).map((t) => (
                   <span key={t}>{t}</span>
                 ))}
               </div>
