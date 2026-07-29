@@ -115,6 +115,31 @@ function instructionsToText(ins: any): string {
   return ins.text || '';
 }
 
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&#x27;/gi, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
+}
+
+// Pull an Open Graph meta value (used to read the caption of a social post).
+function metaContent(html: string, prop: string): string {
+  const a = html.match(
+    new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]*content=["']([^"']*)["']`, 'i'),
+  );
+  if (a) return decodeEntities(a[1]);
+  const b = html.match(
+    new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]*(?:property|name)=["']${prop}["']`, 'i'),
+  );
+  return b ? decodeEntities(b[1]) : '';
+}
+
+const SOCIAL = /(instagram\.com|tiktok\.com|youtube\.com|youtu\.be|facebook\.com|fb\.watch|pinterest\.)/i;
+
 function stripHtml(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, '')
@@ -237,6 +262,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           recipeIngredient: ld.recipeIngredient,
           recipeInstructions: instructionsToText(ld.recipeInstructions),
         });
+      } else if (SOCIAL.test(url)) {
+        // Instagram/TikTok/etc. don't share recipe data — the best we can read
+        // is the post caption from the Open Graph preview tags.
+        const caption = [metaContent(html, 'og:title'), metaContent(html, 'og:description')]
+          .filter(Boolean)
+          .join('\n');
+        if (caption.trim().length < 40) {
+          return res.status(422).json({
+            error:
+              "Instagram and TikTok don't share the recipe with apps — it's usually in the video or behind a login. Copy the caption (the text under the reel) and paste it in the box below.",
+          });
+        }
+        extractedFrom = 'social post caption';
+        material = caption;
       } else {
         extractedFrom = 'page text (no JSON-LD found)';
         material = stripHtml(html);

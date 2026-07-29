@@ -819,6 +819,12 @@ tr.hot td.ing {
   height: 200px;
   resize: vertical;
 }
+.import-hint {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  margin: -4px 0 0;
+}
 .import-divider {
   font-family: 'Space Mono', monospace;
   font-size: 11px;

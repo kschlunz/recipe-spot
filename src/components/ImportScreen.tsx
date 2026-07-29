@@ -115,10 +115,11 @@ export default function ImportScreen() {
       {!draft && (
         <>
           <div className="import-head">
-            <h1>Import a recipe</h1>
+            <h1>Add a recipe</h1>
             <p>
-              Paste a recipe URL and it's pulled and structured automatically. No clean link
-              (a cookbook, an index card, a paywalled page)? Paste the text instead.
+              Paste a recipe URL and it's pulled and structured automatically. Or write your own —
+              type it out, or paste a cookbook page or an Instagram/TikTok caption. Claude sorts
+              whatever you give it into the grid.
             </p>
           </div>
 
@@ -131,14 +132,18 @@ export default function ImportScreen() {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
             />
+            <p className="import-hint">
+              Instagram &amp; TikTok links are best-effort — they usually keep the recipe in the video,
+              so if it doesn't work, copy the caption and paste it below.
+            </p>
 
             <div className="import-divider">— or —</div>
 
-            <label htmlFor="imp-text">Paste recipe text</label>
+            <label htmlFor="imp-text">Write it or paste it</label>
             <textarea
               id="imp-text"
               spellCheck={false}
-              placeholder="Ingredients and instructions, however you have them…"
+              placeholder="Type your own recipe, or paste a caption / cookbook page — ingredients and steps, however you have them…"
               value={text}
               onChange={(e) => setText(e.target.value)}
             />
