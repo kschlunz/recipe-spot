@@ -33,6 +33,7 @@ export function useRecipeList() {
 export function useRecipe(slug: string) {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [tags, setTags] = useState<string[]>([]);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,6 +48,7 @@ export function useRecipe(slug: string) {
         if (alive()) {
           setRecipe(json.recipe?.data ?? null);
           setTags(json.recipe?.tags ?? []);
+          setPhotoUrl(json.recipe?.photo_url ?? null);
         }
       } catch (e) {
         if (alive()) setError((e as Error).message);
@@ -61,6 +63,7 @@ export function useRecipe(slug: string) {
     let on = true;
     setRecipe(null);
     setTags([]);
+    setPhotoUrl(null);
     load(() => on);
     return () => {
       on = false;
@@ -69,5 +72,5 @@ export function useRecipe(slug: string) {
 
   const refresh = useCallback(() => load(() => true), [load]);
 
-  return { recipe, tags, loading, error, refresh };
+  return { recipe, tags, photoUrl, loading, error, refresh };
 }

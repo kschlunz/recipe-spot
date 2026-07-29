@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import RecipeView from './RecipeView';
 import CookNotes from './CookNotes';
 import { useRecipe } from '../hooks/useRecipes';
 import { buildGrid } from '../lib/recipeGrid';
 import { effectiveTags } from '../lib/tags';
+import { fileToResizedBase64 } from '../lib/image';
 import { STEW, type Recipe } from '../data/recipe';
 import { DAYS, type Day } from '../hooks/useMealPlan';
 
@@ -130,10 +131,46 @@ function EditPanel({
 }
 
 export default function RecipePage({ slug }: { slug: string }) {
-  const { recipe, tags, loading, error, refresh } = useRecipe(slug);
+  const { recipe, tags, photoUrl, loading, error, refresh } = useRecipe(slug);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionErr, setActionErr] = useState('');
+  const photoRef = useRef<HTMLInputElement>(null);
+
+  const uploadPhoto = async (file: File) => {
+    setBusy(true);
+    setActionErr('');
+    try {
+      const { base64, mediaType } = await fileToResizedBase64(file, 1400, 0.82);
+      const res = await fetch('/api/recipe-photo', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ slug, image: base64, mediaType }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+      refresh();
+    } catch (e) {
+      setActionErr((e as Error).message);
+    } finally {
+      setBusy(false);
+      if (photoRef.current) photoRef.current.value = '';
+    }
+  };
+
+  const removePhoto = async () => {
+    if (!window.confirm('Remove this photo?')) return;
+    setBusy(true);
+    setActionErr('');
+    try {
+      const res = await fetch(`/api/recipe-photo?slug=${encodeURIComponent(slug)}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+      refresh();
+    } catch (e) {
+      setActionErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   // The Stew is the flagship example — fall back to the bundled copy if the
   // table hasn't been seeded yet, so /r/the-stew always renders.
@@ -185,29 +222,55 @@ export default function RecipePage({ slug }: { slug: string }) {
         <>
           <AddToWeek slug={slug} />
 
-          {(tags.length > 0 || editable) && (
-            <div className="rp-meta">
-              <div className="rtags">
-                {effectiveTags(tags, shown.eyebrow).map((t) => (
-                  <span key={t}>{t}</span>
-                ))}
-              </div>
-              {editable && (
-                <div className="rp-actions">
-                  <button className="rp-edit" onClick={() => setEditing((v) => !v)}>
-                    {editing ? 'Close editor' : 'Edit recipe'}
-                  </button>
-                  <button onClick={duplicate} disabled={busy}>
-                    Duplicate
-                  </button>
-                  <button className="danger" onClick={del} disabled={busy}>
-                    Delete
-                  </button>
-                </div>
-              )}
+          <div className="rp-meta">
+            <div className="rtags">
+              {effectiveTags(tags, shown.eyebrow).map((t) => (
+                <span key={t}>{t}</span>
+              ))}
+            </div>
+            <div className="rp-actions">
+                <button onClick={() => window.print()}>Print</button>
+                {editable && (
+                  <>
+                    <button className="rp-edit" onClick={() => setEditing((v) => !v)}>
+                      {editing ? 'Close editor' : 'Edit recipe'}
+                    </button>
+                    <button onClick={() => photoRef.current?.click()} disabled={busy}>
+                      {photoUrl ? 'Change photo' : 'Add photo'}
+                    </button>
+                    {photoUrl && (
+                      <button onClick={removePhoto} disabled={busy}>
+                        Remove photo
+                      </button>
+                    )}
+                    <button onClick={duplicate} disabled={busy}>
+                      Duplicate
+                    </button>
+                    <button className="danger" onClick={del} disabled={busy}>
+                      Delete
+                    </button>
+                    <input
+                      ref={photoRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) uploadPhoto(f);
+                      }}
+                    />
+                  </>
+                )}
+            </div>
+          </div>
+          {actionErr && <p className="status-line err">{actionErr}</p>}
+
+          {photoUrl && (
+            <div className="recipe-photo">
+              <img src={photoUrl} alt={recipe?.title ?? 'Recipe photo'} />
             </div>
           )}
-          {actionErr && <p className="status-line err">{actionErr}</p>}
 
           {editing && recipe && (
             <EditPanel

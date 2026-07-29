@@ -53,7 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (slug) {
       const { data, error } = await supabase
         .from('recipes')
-        .select('slug, title, data, source_url, tags, created_at, updated_at')
+        .select('slug, title, data, source_url, tags, photo_url, created_at, updated_at')
         .eq('slug', slug)
         .maybeSingle();
       if (error) return res.status(500).json({ error: error.message });
@@ -64,7 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { data, error } = await supabase
       .from('recipes')
-      .select('slug, title, data, tags')
+      .select('slug, title, data, tags, photo_url')
       .order('created_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
 
@@ -74,6 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       eyebrow: row.data?.eyebrow ?? '',
       tagline: row.data?.tagline ?? '',
       tags: row.tags ?? [],
+      photoUrl: row.photo_url ?? null,
     }));
     res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
     return res.status(200).json({ total: recipes.length, recipes });
