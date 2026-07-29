@@ -1025,7 +1025,25 @@ tr.hot td.ing {
 .day-recipe {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(27, 34, 28, 0.12);
+}
+.day-recipe:last-of-type {
+  border-bottom: 0;
+  margin-bottom: 4px;
+}
+.day-recipe-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.day-remove {
+  font-size: 11px;
+  padding: 4px 9px;
 }
 .day-recipe-link {
   display: block;
@@ -1125,12 +1143,27 @@ tr.hot td.ing {
 .shop-tip b {
   color: var(--ink);
 }
+.shop-section {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  margin: 26px 0 2px;
+}
+.shop-section-hint {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin: 0 0 12px;
+}
 .shop-list {
   list-style: none;
   margin: 0;
   padding: 0;
   border: 2px solid var(--rule);
   background: var(--card);
+}
+.shop-list + .shop-list {
+  margin-top: 14px;
 }
 .shop-item {
   display: flex;

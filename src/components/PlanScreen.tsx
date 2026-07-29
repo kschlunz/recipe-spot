@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { DAYS, useMealPlan, type Day, type PlanEntry } from '../hooks/useMealPlan';
+import { DAYS, useMealPlan, type Day, type PlanEntry, type PlanRecipe } from '../hooks/useMealPlan';
 import { useRecipeList } from '../hooks/useRecipes';
 
 function RecipePicker({
@@ -83,11 +83,47 @@ function DayNote({ value, onSave }: { value: string; onSave: (v: string) => void
   );
 }
 
+// One planned dish within a day: link, servings stepper, remove.
+function DayRecipe({
+  recipe,
+  onServings,
+  onRemove,
+}: {
+  recipe: PlanRecipe;
+  onServings: (servings: number) => void;
+  onRemove: () => void;
+}) {
+  const serves = recipe.servings ?? recipe.serves ?? 4;
+  return (
+    <div className="day-recipe">
+      <a className="day-recipe-link" href={`#/r/${recipe.slug}`}>
+        {recipe.eyebrow && <span className="eyebrow">{recipe.eyebrow}</span>}
+        <b>{recipe.title}</b>
+      </a>
+      <div className="day-recipe-controls">
+        <div className="day-serves">
+          <span>Serves</span>
+          <button className="step" aria-label="Fewer servings" onClick={() => onServings(Math.max(1, serves - 1))}>
+            −
+          </button>
+          <b>{serves}</b>
+          <button className="step" aria-label="More servings" onClick={() => onServings(serves + 1)}>
+            +
+          </button>
+        </div>
+        <button className="day-remove" onClick={onRemove}>
+          Remove
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function PlanScreen() {
-  const { plan, loading, error, assignRecipe, removeRecipe, setNote, setServings, clear } = useMealPlan();
+  const { plan, loading, error, addRecipe, removeRecipe, setNote, setServings, clear } = useMealPlan();
   const [picking, setPicking] = useState<Day | null>(null);
 
-  const filled = DAYS.filter((d) => plan[d.key].recipe || plan[d.key].note.trim()).length;
+  const filled = DAYS.filter((d) => plan[d.key].recipes.length > 0 || plan[d.key].note.trim()).length;
   const pickingLabel = picking ? DAYS.find((d) => d.key === picking)!.label : '';
 
   return (
@@ -123,58 +159,34 @@ export default function PlanScreen() {
 
       <div className="week-grid">
         {DAYS.map((d) => {
-          const { recipe, note, servings } = plan[d.key];
-          const serves = servings ?? recipe?.serves ?? 4;
+          const { recipes, note } = plan[d.key];
+          const has = recipes.length > 0 || note.trim().length > 0;
           return (
-            <div key={d.key} className={'day-card' + (recipe || note.trim() ? ' has' : '')}>
+            <div key={d.key} className={'day-card' + (has ? ' has' : '')}>
               <div className="day-label">{d.label}</div>
 
-              {recipe ? (
-                <div className="day-recipe">
-                  <a className="day-recipe-link" href={`#/r/${recipe.slug}`}>
-                    {recipe.eyebrow && <span className="eyebrow">{recipe.eyebrow}</span>}
-                    <b>{recipe.title}</b>
-                  </a>
-                  <div className="day-serves">
-                    <span>Serves</span>
-                    <button
-                      className="step"
-                      aria-label="Fewer servings"
-                      onClick={() => setServings(d.key, Math.max(1, serves - 1))}
-                    >
-                      −
-                    </button>
-                    <b>{serves}</b>
-                    <button
-                      className="step"
-                      aria-label="More servings"
-                      onClick={() => setServings(d.key, serves + 1)}
-                    >
-                      +
-                    </button>
-                  </div>
-                  <div className="day-actions">
-                    <button onClick={() => setPicking(d.key)}>Change</button>
-                    <button onClick={() => removeRecipe(d.key)}>Remove</button>
-                  </div>
-                </div>
+              {recipes.map((r) => (
+                <DayRecipe
+                  key={r.id}
+                  recipe={r}
+                  onServings={(s) => setServings(d.key, r.id, s)}
+                  onRemove={() => removeRecipe(d.key, r.id)}
+                />
+              ))}
+
+              {recipes.length === 0 && !note.trim() ? (
+                // Empty day: a full-width invitation.
+                <button className="day-add" onClick={() => setPicking(d.key)} disabled={loading}>
+                  + Add recipe
+                </button>
               ) : (
-                // Empty day: invite a recipe. A noted day treats the note as the
-                // plan, so the big button gives way to a quiet "add a recipe" link.
-                !note.trim() && (
-                  <button className="day-add" onClick={() => setPicking(d.key)} disabled={loading}>
-                    + Add recipe
-                  </button>
-                )
+                // Already has something: a quiet link to stack on another dish.
+                <button className="day-addlink" onClick={() => setPicking(d.key)} disabled={loading}>
+                  {recipes.length > 0 ? '+ add another' : '+ add a recipe'}
+                </button>
               )}
 
               <DayNote value={note} onSave={(v) => setNote(d.key, v)} />
-
-              {!recipe && note.trim() && (
-                <button className="day-addlink" onClick={() => setPicking(d.key)} disabled={loading}>
-                  + add a recipe
-                </button>
-              )}
             </div>
           );
         })}
@@ -185,7 +197,7 @@ export default function PlanScreen() {
           dayLabel={pickingLabel}
           onClose={() => setPicking(null)}
           onPick={(entry) => {
-            assignRecipe(picking, entry);
+            addRecipe(picking, entry);
             setPicking(null);
           }}
         />
