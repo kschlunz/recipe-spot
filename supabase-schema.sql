@@ -143,6 +143,14 @@ where mp.recipe_slug is not null
     where r.day = mp.day and r.recipe_slug = mp.recipe_slug
   );
 
+-- Shared shopping-list checkmarks: which items are ticked off, by normalized
+-- name key. Shared across the household so both people see the same state.
+create table if not exists public.shopping_checked (
+  item_key   text primary key,
+  checked_at timestamptz default now()
+);
+alter table public.shopping_checked enable row level security;
+
 -- Cook notes: a timestamped log per recipe ("added more garlic, +5 min").
 create table if not exists public.cook_notes (
   id          uuid primary key default gen_random_uuid(),

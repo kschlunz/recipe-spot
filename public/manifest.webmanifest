@@ -1,0 +1,16 @@
+{
+  "name": "Recipe Spot",
+  "short_name": "Recipe Spot",
+  "description": "Your household's recipes, weekly plan, and shopping list.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#edf0ea",
+  "theme_color": "#1b221c",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
