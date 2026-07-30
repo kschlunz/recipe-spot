@@ -122,9 +122,50 @@ function DayRecipe({
 export default function PlanScreen() {
   const { plan, loading, error, addRecipe, removeRecipe, setNote, setServings, clear } = useMealPlan();
   const [picking, setPicking] = useState<Day | null>(null);
+  const [filling, setFilling] = useState(false);
+  const [fillMsg, setFillMsg] = useState('');
 
   const filled = DAYS.filter((d) => plan[d.key].recipes.length > 0 || plan[d.key].note.trim()).length;
   const pickingLabel = picking ? DAYS.find((d) => d.key === picking)!.label : '';
+
+  // A day is "open" for the randomizer only if it has no recipe and no note, so
+  // we never overwrite something you've set (a recipe, or "eat out").
+  const openDays = DAYS.filter((d) => plan[d.key].recipes.length === 0 && !plan[d.key].note.trim());
+
+  const fillWeek = async () => {
+    if (openDays.length === 0) return;
+    setFilling(true);
+    setFillMsg('');
+    try {
+      const res = await fetch('/api/plan-suggest', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ days: openDays.map((d) => d.key) }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      const picks: Array<{ day: Day; slug: string; title: string; eyebrow?: string; tagline?: string; serves?: number }> =
+        json.picks ?? [];
+      if (picks.length === 0) {
+        setFillMsg(json.note || 'Nothing to add — import some recipes first.');
+        return;
+      }
+      for (const p of picks) {
+        await addRecipe(p.day, {
+          slug: p.slug,
+          title: p.title,
+          eyebrow: p.eyebrow,
+          tagline: p.tagline,
+          serves: p.serves,
+        });
+      }
+      if (json.note) setFillMsg(json.note);
+    } catch (e) {
+      setFillMsg((e as Error).message);
+    } finally {
+      setFilling(false);
+    }
+  };
 
   return (
     <div className="wrap">
@@ -141,6 +182,17 @@ export default function PlanScreen() {
           >
             {filled}/7 planned
           </span>
+          <button
+            onClick={fillWeek}
+            disabled={filling || openDays.length === 0}
+            title={
+              openDays.length === 0
+                ? 'Every day already has something'
+                : 'Fill the empty days with a healthy, varied pick'
+            }
+          >
+            {filling ? 'Filling…' : '🎲 Fill my week'}
+          </button>
           <a href="#/shopping" className="go" style={{ padding: '6px 13px', textDecoration: 'none' }}>
             🛒 Shopping list
           </a>
@@ -156,6 +208,7 @@ export default function PlanScreen() {
       </div>
 
       {error && <p className="status-line err">{error}</p>}
+      {fillMsg && <p className="status-line">{fillMsg}</p>}
 
       <div className="week-grid">
         {DAYS.map((d) => {

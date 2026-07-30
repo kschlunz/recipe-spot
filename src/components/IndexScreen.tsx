@@ -2,13 +2,15 @@ import { useMemo, useState } from 'react';
 import { useRecipeList } from '../hooks/useRecipes';
 import type { RecipeSummary } from '../data/recipe';
 import { effectiveTags, tagKey } from '../lib/tags';
+import Heart from './Heart';
 
 const CAT_LIMIT = 16; // categories shown in the sidebar before "show all"
 
-function RecipeCard({ r }: { r: RecipeSummary }) {
+function RecipeCard({ r, onFav }: { r: RecipeSummary; onFav: (slug: string) => void }) {
   const tags = effectiveTags(r.tags, r.eyebrow);
   return (
     <a className="rcard" href={`#/r/${r.slug}`}>
+      <Heart on={!!r.favorite} onClick={() => onFav(r.slug)} className="rcard-heart" />
       {r.eyebrow && <p className="eyebrow">{r.eyebrow}</p>}
       <h3>{r.title}</h3>
       {r.tagline && <p className="deck">{r.tagline}</p>}
@@ -24,10 +26,13 @@ function RecipeCard({ r }: { r: RecipeSummary }) {
 }
 
 export default function IndexScreen() {
-  const { recipes, loading, error } = useRecipeList();
+  const { recipes, loading, error, toggleFavorite } = useRecipeList();
   const [query, setQuery] = useState('');
   const [activeTag, setActiveTag] = useState<string | null>(null); // stores a tag key
+  const [showFavs, setShowFavs] = useState(false);
   const [showAllCats, setShowAllCats] = useState(false);
+
+  const favCount = useMemo(() => recipes.filter((r) => r.favorite).length, [recipes]);
 
   // Categories = tags shared by 3+ recipes, merged by normalized key and ranked
   // by how many recipes use them. Keeps the browse list meaningful, not a wall.
@@ -56,6 +61,7 @@ export default function IndexScreen() {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return recipes.filter((r) => {
+      if (showFavs && !r.favorite) return false;
       const tags = effectiveTags(r.tags, r.eyebrow);
       if (activeTag && !tags.some((t) => tagKey(t) === activeTag)) return false;
       if (!q) return true;
@@ -66,7 +72,22 @@ export default function IndexScreen() {
         tags.some((t) => t.toLowerCase().includes(q))
       );
     });
-  }, [recipes, query, activeTag]);
+  }, [recipes, query, activeTag, showFavs]);
+
+  // Favorites and a category are mutually exclusive filters — picking one clears
+  // the other so the active header stays unambiguous.
+  const pickAll = () => {
+    setActiveTag(null);
+    setShowFavs(false);
+  };
+  const pickFavs = () => {
+    setActiveTag(null);
+    setShowFavs(true);
+  };
+  const pickCat = (key: string) => {
+    setShowFavs(false);
+    setActiveTag(activeTag === key ? null : key);
+  };
 
   return (
     <div className="wrap">
@@ -84,19 +105,29 @@ export default function IndexScreen() {
       </div>
 
       <div className="index-layout">
-        {categories.length > 0 && (
+        {(categories.length > 0 || favCount > 0) && (
           <aside className="index-sidebar">
             <h2>Browse</h2>
-            <button className="cat" aria-pressed={activeTag === null} onClick={() => setActiveTag(null)}>
+            <button
+              className="cat"
+              aria-pressed={!showFavs && activeTag === null}
+              onClick={pickAll}
+            >
               <span>All recipes</span>
               <span className="count">{recipes.length}</span>
             </button>
+            {favCount > 0 && (
+              <button className="cat cat-fav" aria-pressed={showFavs} onClick={pickFavs}>
+                <span>♥ Favorites</span>
+                <span className="count">{favCount}</span>
+              </button>
+            )}
             {shownCats.map((c) => (
               <button
                 key={c.key}
                 className="cat"
-                aria-pressed={activeTag === c.key}
-                onClick={() => setActiveTag(activeTag === c.key ? null : c.key)}
+                aria-pressed={!showFavs && activeTag === c.key}
+                onClick={() => pickCat(c.key)}
               >
                 <span>{c.label}</span>
                 <span className="count">{c.count}</span>
@@ -111,10 +142,19 @@ export default function IndexScreen() {
         )}
 
         <div className="index-main">
-          {activeLabel && (
+          {(activeLabel || showFavs) && (
             <p className="index-active">
-              {visible.length} in <b>{activeLabel}</b> ·{' '}
-              <button className="linkish" onClick={() => setActiveTag(null)}>
+              {showFavs ? (
+                <>
+                  {visible.length} <b>♥ favorites</b>
+                </>
+              ) : (
+                <>
+                  {visible.length} in <b>{activeLabel}</b>
+                </>
+              )}{' '}
+              ·{' '}
+              <button className="linkish" onClick={pickAll}>
                 clear
               </button>
             </p>
@@ -140,7 +180,7 @@ export default function IndexScreen() {
           ) : (
             <div className="card-grid">
               {visible.map((r) => (
-                <RecipeCard key={r.slug} r={r} />
+                <RecipeCard key={r.slug} r={r} onFav={toggleFavorite} />
               ))}
             </div>
           )}

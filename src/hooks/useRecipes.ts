@@ -28,7 +28,28 @@ export function useRecipeList() {
   }, [refresh]);
   useRefreshOnFocus(() => refresh(true));
 
-  return { recipes, loading, error, refresh };
+  // Optimistically flip the heart, then persist. Reload on failure.
+  const toggleFavorite = useCallback((slug: string) => {
+    let next = false;
+    setRecipes((rs) =>
+      rs.map((r) => {
+        if (r.slug !== slug) return r;
+        next = !r.favorite;
+        return { ...r, favorite: next };
+      }),
+    );
+    fetch('/api/recipes', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug, favorite: next }),
+    })
+      .then((r) => {
+        if (!r.ok) refresh(true);
+      })
+      .catch(() => refresh(true));
+  }, [refresh]);
+
+  return { recipes, loading, error, refresh, toggleFavorite };
 }
 
 // Fetch a single recipe by slug from /api/recipes?slug=.
@@ -37,6 +58,7 @@ export function useRecipe(slug: string) {
   const [tags, setTags] = useState<string[]>([]);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const [favorite, setFavorite] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,6 +75,7 @@ export function useRecipe(slug: string) {
           setTags(json.recipe?.tags ?? []);
           setPhotoUrl(json.recipe?.photo_url ?? null);
           setSourceUrl(json.recipe?.source_url ?? null);
+          setFavorite(!!json.recipe?.favorite);
         }
       } catch (e) {
         if (alive()) setError((e as Error).message);
@@ -77,5 +100,15 @@ export function useRecipe(slug: string) {
 
   const refresh = useCallback(() => load(() => true), [load]);
 
-  return { recipe, tags, photoUrl, sourceUrl, loading, error, refresh };
+  const toggleFavorite = useCallback(() => {
+    const next = !favorite;
+    setFavorite(next);
+    fetch('/api/recipes', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug, favorite: next }),
+    }).catch(() => setFavorite(!next));
+  }, [favorite, slug]);
+
+  return { recipe, tags, photoUrl, sourceUrl, favorite, loading, error, refresh, toggleFavorite };
 }

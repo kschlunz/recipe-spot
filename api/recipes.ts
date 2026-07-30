@@ -53,7 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (slug) {
       const { data, error } = await supabase
         .from('recipes')
-        .select('slug, title, data, source_url, tags, photo_url, created_at, updated_at')
+        .select('slug, title, data, source_url, tags, photo_url, favorite, created_at, updated_at')
         .eq('slug', slug)
         .maybeSingle();
       if (error) return res.status(500).json({ error: error.message });
@@ -64,7 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { data, error } = await supabase
       .from('recipes')
-      .select('slug, title, data, tags, photo_url')
+      .select('slug, title, data, tags, photo_url, favorite')
       .order('created_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
 
@@ -75,6 +75,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       tagline: row.data?.tagline ?? '',
       tags: row.tags ?? [],
       photoUrl: row.photo_url ?? null,
+      favorite: !!row.favorite,
     }));
     res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
     return res.status(200).json({ total: recipes.length, recipes });
@@ -103,7 +104,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === 'PATCH') {
-    const { slug, recipe, tags } = req.body ?? {};
+    const { slug, recipe, tags, favorite } = req.body ?? {};
+
+    // Lightweight favorite toggle — { slug, favorite } with no full recipe.
+    if (slug && recipe === undefined && typeof favorite === 'boolean') {
+      const { error } = await supabase.from('recipes').update({ favorite }).eq('slug', slug);
+      if (error) return res.status(500).json({ error: error.message });
+      return res.status(200).json({ ok: true, slug, favorite });
+    }
+
     if (!slug || !recipe || !recipe.title || !Array.isArray(recipe.ingredients) || !Array.isArray(recipe.steps)) {
       return res.status(400).json({ error: 'Provide slug and a valid recipe with title, ingredients, and steps.' });
     }
