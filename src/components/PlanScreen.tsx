@@ -49,7 +49,15 @@ function RecipePicker({
               <button
                 key={r.slug}
                 className="picker-item"
-                onClick={() => onPick({ slug: r.slug, title: r.title, eyebrow: r.eyebrow, tagline: r.tagline })}
+                onClick={() =>
+                  onPick({
+                    slug: r.slug,
+                    title: r.title,
+                    eyebrow: r.eyebrow,
+                    tagline: r.tagline,
+                    calories: r.calories,
+                  })
+                }
               >
                 <b>{r.title}</b>
                 {r.eyebrow && <span>{r.eyebrow}</span>}
@@ -120,7 +128,8 @@ function DayRecipe({
 }
 
 export default function PlanScreen() {
-  const { plan, loading, error, addRecipe, removeRecipe, setNote, setServings, clear } = useMealPlan();
+  const { plan, loading, error, refresh, addRecipe, removeRecipe, setNote, setServings, clear } =
+    useMealPlan();
   const [picking, setPicking] = useState<Day | null>(null);
   const [filling, setFilling] = useState(false);
   const [fillMsg, setFillMsg] = useState('');
@@ -147,8 +156,15 @@ export default function PlanScreen() {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-      const picks: Array<{ day: Day; slug: string; title: string; eyebrow?: string; tagline?: string; serves?: number }> =
-        json.picks ?? [];
+      const picks: Array<{
+        day: Day;
+        slug: string;
+        title: string;
+        eyebrow?: string;
+        tagline?: string;
+        serves?: number;
+        calories?: number | null;
+      }> = json.picks ?? [];
       if (picks.length === 0) {
         setFillMsg(json.note || 'Nothing to add — import some recipes first.');
         return;
@@ -160,8 +176,11 @@ export default function PlanScreen() {
           eyebrow: p.eyebrow,
           tagline: p.tagline,
           serves: p.serves,
+          calories: p.calories,
         });
       }
+      // Re-sync from the server so calories/servings are authoritative.
+      refresh(true);
       if (json.note) setFillMsg(json.note);
     } catch (e) {
       setFillMsg((e as Error).message);

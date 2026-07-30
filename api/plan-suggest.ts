@@ -150,6 +150,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       eyebrow: r.data?.eyebrow ?? '',
       tagline: r.data?.tagline ?? '',
       serves: Number(r.data?.serves) || undefined,
+      calories: Number(r.nutrition?.calories) || null,
     };
   });
 
