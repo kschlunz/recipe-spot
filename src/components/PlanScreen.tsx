@@ -108,6 +108,7 @@ function DayRecipe({
         {recipe.eyebrow && <span className="eyebrow">{recipe.eyebrow}</span>}
         <b>{recipe.title}</b>
       </a>
+      {recipe.calories ? <div className="day-recipe-cal">≈ {recipe.calories.toLocaleString()} cal</div> : null}
       <div className="day-recipe-controls">
         <div className="day-serves">
           <span>Serves</span>
@@ -262,9 +263,9 @@ export default function PlanScreen() {
                 />
               ))}
 
-              {dayCalories(d.key) > 0 && (
-                <div className="day-cal" title="Per serving, estimated">
-                  ≈ {dayCalories(d.key).toLocaleString()} cal
+              {recipes.length > 1 && dayCalories(d.key) > 0 && (
+                <div className="day-cal" title="Combined per-serving calories for the day (estimated)">
+                  Total ≈ {dayCalories(d.key).toLocaleString()} cal
                 </div>
               )}
 

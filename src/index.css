@@ -1175,8 +1175,17 @@ tr.hot td.ing {
   min-width: 1.2em;
   text-align: center;
 }
+.day-recipe-cal {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+  margin-top: -2px;
+}
 .day-cal {
   margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(27, 34, 28, 0.12);
   font-family: 'Space Mono', monospace;
   font-size: 11px;
   letter-spacing: 0.06em;
