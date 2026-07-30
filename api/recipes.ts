@@ -69,11 +69,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ recipe: data });
     }
 
-    const { data, error } = await supabase
+    // TODO(favorites): add `favorite` back once the column exists (schema update).
+    const LIST = 'slug, title, data, tags, photo_url';
+    // Try to include nutrition (to know which recipes still need it); fall back
+    // if the column isn't there yet.
+    let data: any[] | null = null;
+    let error: any = null;
+    ({ data, error } = await supabase
       .from('recipes')
-      // TODO(favorites): add `favorite` back once the column exists (schema update).
-      .select('slug, title, data, tags, photo_url')
-      .order('created_at', { ascending: false });
+      .select(`${LIST}, nutrition`)
+      .order('created_at', { ascending: false }));
+    if (error && /nutrition/i.test(error.message)) {
+      ({ data, error } = await supabase.from('recipes').select(LIST).order('created_at', { ascending: false }));
+    }
     if (error) return res.status(500).json({ error: error.message });
 
     const recipes = (data ?? []).map((row: any) => ({
@@ -84,6 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       tags: row.tags ?? [],
       photoUrl: row.photo_url ?? null,
       favorite: false, // TODO(favorites): row.favorite once the column exists
+      hasNutrition: !!row.nutrition,
     }));
     res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
     return res.status(200).json({ total: recipes.length, recipes });
