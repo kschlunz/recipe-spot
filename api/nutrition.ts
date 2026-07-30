@@ -13,7 +13,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 export const config = { maxDuration: 30 };
 
 const anthropic = new Anthropic();
-const MODEL = 'claude-sonnet-5';
+// Fast, non-reasoning model — returns the JSON directly. (A reasoning model can
+// spend a small token budget on thinking and leave no text to parse, which
+// surfaced as "Unexpected end of JSON input".)
+const MODEL = 'claude-haiku-4-5';
 
 function client(res: VercelResponse): SupabaseClient | null {
   const url = process.env.SUPABASE_URL;
@@ -65,7 +68,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const msg = await anthropic.messages.create({
       model: MODEL,
-      max_tokens: 200,
+      max_tokens: 400,
       system:
         'You estimate recipe nutrition. Given a full ingredient list and how many servings the recipe ' +
         'makes, estimate the nutrition PER SERVING using standard food composition values. Divide totals ' +
@@ -80,7 +83,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .join('')
       .replace(/```json|```/g, '')
       .trim();
-    const parsed = JSON.parse(text);
+    // Pull out just the JSON object, in case the model adds any stray text.
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('empty response from the model');
+    const parsed = JSON.parse(match[0]);
     const nutrition = {
       calories: num(parsed.calories),
       protein: num(parsed.protein),
