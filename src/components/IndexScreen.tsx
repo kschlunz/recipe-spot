@@ -27,13 +27,52 @@ function RecipeCard({ r, onFav }: { r: RecipeSummary; onFav: (slug: string) => v
 }
 
 export default function IndexScreen() {
-  const { recipes, loading, error, toggleFavorite } = useRecipeList();
+  const { recipes, loading, error, refresh, toggleFavorite } = useRecipeList();
   const [query, setQuery] = useState('');
   const [activeTag, setActiveTag] = useState<string | null>(null); // stores a tag key
   const [showFavs, setShowFavs] = useState(false);
   const [showAllCats, setShowAllCats] = useState(false);
+  const [backfill, setBackfill] = useState({ running: false, done: 0, total: 0, msg: '' });
 
   const favCount = useMemo(() => recipes.filter((r) => r.favorite).length, [recipes]);
+  const missingNutrition = useMemo(() => recipes.filter((r) => !r.hasNutrition), [recipes]);
+
+  // Estimate nutrition for every recipe that doesn't have it yet, one after
+  // another with a live count. Stops early if the estimates can't be saved
+  // (nutrition column not added), and refreshes so the bar hides when done.
+  const backfillNutrition = async () => {
+    const slugs = missingNutrition.map((r) => r.slug);
+    if (slugs.length === 0 || backfill.running) return;
+    setBackfill({ running: true, done: 0, total: slugs.length, msg: '' });
+    let done = 0;
+    let unsaved = false;
+    for (const slug of slugs) {
+      try {
+        const res = await fetch('/api/nutrition', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ slug }),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (res.ok && j.saved === false) {
+          unsaved = true;
+          break;
+        }
+      } catch {
+        /* skip this one, keep going */
+      }
+      done += 1;
+      setBackfill((b) => ({ ...b, done }));
+    }
+    await refresh(true);
+    setBackfill((b) => ({
+      ...b,
+      running: false,
+      msg: unsaved
+        ? 'Estimates could not be saved — run the database update (nutrition column) first.'
+        : '',
+    }));
+  };
 
   // Categories = tags shared by 3+ recipes, merged by normalized key and ranked
   // by how many recipes use them. Keeps the browse list meaningful, not a wall.
@@ -143,6 +182,28 @@ export default function IndexScreen() {
         )}
 
         <div className="index-main">
+          {(missingNutrition.length > 0 || backfill.msg) && (
+            <div className="nutri-backfill">
+              {backfill.running ? (
+                <span>
+                  Estimating nutrition… {backfill.done}/{backfill.total}
+                </span>
+              ) : backfill.msg ? (
+                <span className="nb-msg">{backfill.msg}</span>
+              ) : (
+                <>
+                  <span>
+                    {missingNutrition.length} recipe{missingNutrition.length === 1 ? '' : 's'} without
+                    nutrition.
+                  </span>{' '}
+                  <button className="linkish" onClick={backfillNutrition}>
+                    Estimate all
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
           {(activeLabel || showFavs) && (
             <p className="index-active">
               {showFavs ? (
