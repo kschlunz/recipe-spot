@@ -354,7 +354,21 @@ export default function RecipePage({ slug }: { slug: string }) {
           {actionErr && <p className="status-line err">{actionErr}</p>}
           {infoMsg && <p className="status-line">{infoMsg}</p>}
           {editable && !photoUrl && (
-            <p className="rp-hint">Add a dish photo — pick a file, or paste an image (⌘/Ctrl-V).</p>
+            <button
+              type="button"
+              className="photo-drop"
+              onClick={() => photoRef.current?.click()}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const f = e.dataTransfer.files?.[0];
+                if (f && f.type.startsWith('image/')) uploadPhoto(f);
+              }}
+              disabled={busy}
+            >
+              <span className="pd-title">{busy ? 'Uploading…' : '📷 Add a dish photo'}</span>
+              <span className="pd-sub">Click to choose · drop an image here · or paste (⌘/Ctrl-V)</span>
+            </button>
           )}
 
           {photoUrl && (
