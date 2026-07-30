@@ -14,7 +14,14 @@ export const DAYS = [
 export type Day = (typeof DAYS)[number]['key'];
 
 // A recipe picked from the library, before it's placed on a day.
-export type PlanEntry = { slug: string; title: string; eyebrow?: string; tagline?: string; serves?: number };
+export type PlanEntry = {
+  slug: string;
+  title: string;
+  eyebrow?: string;
+  tagline?: string;
+  serves?: number;
+  calories?: number | null;
+};
 // A recipe placed on a day: a PlanEntry plus its meal_plan_recipes row id and
 // its per-dish target servings.
 export type PlanRecipe = PlanEntry & { id: string; servings: number | null; calories?: number | null };
