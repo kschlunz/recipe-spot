@@ -17,6 +17,18 @@ const anthropic = new Anthropic();
 const MODEL = 'claude-sonnet-5';
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
+// Desserts/sweets are never dinner-day picks. This is a hard filter applied
+// before the model ever sees the list (and in the shuffle fallback), so a soft
+// "prefer healthy" prompt can't be overridden by a small library or padding.
+// Chosen to catch obvious sweets while sparing savory homonyms (crab cake, etc.).
+const DESSERT_RE =
+  /\b(desserts?|blondies?|brownies?|cookies?|cupcakes?|cheesecake|cobbler|crumble|custard|mousse|gelato|sorbet|frosting|icing|doughnuts?|donuts?|scones?|fudge|fudgy|ice ?cream|sweet treats?)\b/i;
+
+function isDessert(r: any): boolean {
+  const hay = `${r.title ?? ''} ${r.data?.eyebrow ?? ''} ${(r.tags ?? []).join(' ')}`;
+  return DESSERT_RE.test(hay);
+}
+
 function client(res: VercelResponse): SupabaseClient | null {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
@@ -57,11 +69,12 @@ async function chooseSlugs(recipes: any[], n: number): Promise<string[]> {
       max_tokens: 400,
       temperature: 1,
       system:
-        'You plan a healthy, varied week of home dinners. From the recipes given, choose exactly N ' +
+        'You plan a healthy, varied week of weeknight DINNERS. From the recipes given, choose exactly N ' +
         'that are (1) health-leaning overall — favor vegetables, legumes, fish and lean protein, whole ' +
-        'grains, and salads; go easy on heavy fried or dessert-like dishes — and (2) varied: avoid ' +
-        'repeating the same main protein or cuisine across your picks. Respond with ONLY a JSON array ' +
-        'of exactly N recipe slugs, most-recommended first, using only slugs from the list.',
+        'grains, and salads; go easy on heavy fried dishes — and (2) varied: avoid repeating the same ' +
+        'main protein or cuisine across your picks. These must be main meals — never choose a dessert, ' +
+        'sweet, or baked treat. Respond with ONLY a JSON array of exactly N recipe slugs, ' +
+        'most-recommended first, using only slugs from the list.',
       messages: [{ role: 'user', content: `N = ${n}\n\nRecipes:\n${list}` }],
     });
     const text = msg.content
@@ -108,8 +121,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ picks: [], note: 'No saved recipes yet — import a few first.' });
   }
 
-  const n = Math.min(days.length, recipes.length);
-  const slugs = await chooseSlugs(recipes, n);
+  // Only main meals are eligible for a dinner day — desserts are filtered out
+  // up front. If somehow everything is a dessert, fall back to the full list so
+  // the button still does something.
+  const mains = recipes.filter((r: any) => !isDessert(r));
+  const pool = mains.length > 0 ? mains : recipes;
+
+  const n = Math.min(days.length, pool.length);
+  const slugs = await chooseSlugs(pool, n);
   const bySlug = new Map(recipes.map((r: any) => [r.slug, r]));
 
   const picks = slugs.map((slug, i) => {
@@ -124,9 +143,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
   });
 
+  const short = days.length - picks.length;
   const note =
-    recipes.length < days.length
-      ? `Only ${recipes.length} recipe${recipes.length === 1 ? '' : 's'} saved, so ${days.length - recipes.length} day${days.length - recipes.length === 1 ? '' : 's'} stayed open.`
+    short > 0
+      ? `Only ${pool.length} main-dish recipe${pool.length === 1 ? '' : 's'} to choose from (desserts are skipped), so ${short} day${short === 1 ? '' : 's'} stayed open. Import a few more savory recipes!`
       : undefined;
 
   res.setHeader('Cache-Control', 'no-store');
