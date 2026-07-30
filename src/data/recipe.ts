@@ -68,6 +68,7 @@ export type RecipeSummary = {
   photoUrl?: string | null;
   favorite?: boolean;
   hasNutrition?: boolean;
+  calories?: number | null;
 };
 
 /* ------------------------------------------------------------------ */

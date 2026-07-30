@@ -419,6 +419,13 @@ a {
   background: var(--kale-wash);
   color: var(--kale);
 }
+.rcard-cal {
+  margin: 10px 0 0;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
 
 .empty {
   text-align: center;
