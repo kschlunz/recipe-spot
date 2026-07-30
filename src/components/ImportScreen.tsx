@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import RecipeView from './RecipeView';
 import { buildGrid } from '../lib/recipeGrid';
-import { fileToResizedBase64 } from '../lib/image';
+import { fileToResizedBase64, imageFromClipboard } from '../lib/image';
 import type { Nutrition, Recipe } from '../data/recipe';
 
 // The import flow: paste a URL or text → Claude structures it → preview in the
@@ -20,6 +20,7 @@ export default function ImportScreen() {
   const [extractedFrom, setExtractedFrom] = useState('');
   const [tags, setTags] = useState('');
   const [sourceNutrition, setSourceNutrition] = useState<Nutrition | null>(null);
+  const [sourcePhoto, setSourcePhoto] = useState<string | null>(null);
 
   const [jsonOpen, setJsonOpen] = useState(false);
   const [jsonText, setJsonText] = useState('');
@@ -48,6 +49,7 @@ export default function ImportScreen() {
         extractedFrom?: string;
         tags?: string[];
         nutrition?: Nutrition | null;
+        photo?: string | null;
         error?: string;
       } = {};
       try {
@@ -65,6 +67,7 @@ export default function ImportScreen() {
       setSource(json.source ?? null);
       setExtractedFrom(json.extractedFrom ?? '');
       setSourceNutrition(json.nutrition ?? null);
+      setSourcePhoto(json.photo ?? null);
       if (Array.isArray(json.tags) && json.tags.length) setTags(json.tags.join(', '));
       setJsonText(JSON.stringify(json.recipe, null, 2));
       setJsonErr('');
@@ -101,6 +104,23 @@ export default function ImportScreen() {
     }
   };
 
+  // Paste an image (a screenshot of a recipe or caption) to import it, while on
+  // the input screen.
+  const importPhotoRef = useRef(importPhoto);
+  importPhotoRef.current = importPhoto;
+  useEffect(() => {
+    if (draft) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const f = imageFromClipboard(e);
+      if (f) {
+        e.preventDefault();
+        importPhotoRef.current(f);
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [draft]);
+
   const applyJson = () => {
     try {
       const parsed = JSON.parse(jsonText) as Recipe;
@@ -124,6 +144,7 @@ export default function ImportScreen() {
           recipe: draft,
           source_url: source,
           nutrition: sourceNutrition, // use the source's own numbers when present
+          photo_url: sourcePhoto, // and the source's photo, if the page had one
           tags: tags
             .split(',')
             .map((t) => t.trim())
@@ -132,11 +153,12 @@ export default function ImportScreen() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-      // Only estimate with Claude when the source didn't provide nutrition.
-      // (Fire-and-forget — the recipe page shows a "Calculate nutrition" button
-      // if it isn't ready yet.)
+      // When the source didn't provide nutrition, estimate it now and WAIT, so
+      // the recipe opens with nutrition already filled in rather than showing a
+      // "Calculate nutrition" button.
       if (!sourceNutrition) {
-        fetch('/api/nutrition', {
+        setStatus('Estimating nutrition…');
+        await fetch('/api/nutrition', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ slug: json.slug }),
@@ -211,8 +233,8 @@ export default function ImportScreen() {
             </div>
             <p className="import-hint">
               Upload a photo or screenshot — a cookbook page, a handwritten card, or a screenshot of an
-              Instagram/TikTok caption. Claude reads the recipe right off the image, so you skip the
-              copy-paste.
+              Instagram/TikTok caption. You can also just <b>paste an image</b> (⌘/Ctrl-V) right here.
+              Claude reads the recipe off the image, so you skip the copy-paste.
             </p>
             {status && <p className="status-line">{status}</p>}
             {error && <p className="status-line err">{error}</p>}

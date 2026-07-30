@@ -98,7 +98,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === 'POST') {
-    const { recipe, source_url, tags, nutrition } = req.body ?? {};
+    const { recipe, source_url, tags, nutrition, photo_url } = req.body ?? {};
     if (!recipe || !recipe.title || !Array.isArray(recipe.ingredients) || !Array.isArray(recipe.steps)) {
       return res.status(400).json({ error: 'Provide a valid recipe with title, ingredients, and steps.' });
     }
@@ -110,6 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         title: recipe.title,
         data: recipe,
         source_url: source_url ?? null,
+        photo_url: typeof photo_url === 'string' && photo_url ? photo_url : null,
         tags: Array.isArray(tags) ? tags : [],
       };
       // Save nutrition inline when provided (e.g. lifted from the source page).

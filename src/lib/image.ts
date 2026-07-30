@@ -38,3 +38,16 @@ export async function fileToResizedBase64(
   const out = canvas.toDataURL('image/jpeg', quality);
   return { base64: out.split(',')[1] ?? '', mediaType: 'image/jpeg' };
 }
+
+// Pull an image File out of a paste event's clipboard, if there is one.
+export function imageFromClipboard(e: ClipboardEvent): File | null {
+  const items = e.clipboardData?.items;
+  if (!items) return null;
+  for (const it of items) {
+    if (it.kind === 'file' && it.type.startsWith('image/')) {
+      const f = it.getAsFile();
+      if (f) return f;
+    }
+  }
+  return null;
+}
