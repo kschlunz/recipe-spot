@@ -113,5 +113,17 @@ export function useRecipe(slug: string) {
     }).catch(() => setFavorite(!next));
   }, [favorite, slug]);
 
-  return { recipe, tags, photoUrl, sourceUrl, favorite, nutrition, loading, error, refresh, toggleFavorite };
+  return {
+    recipe,
+    tags,
+    photoUrl,
+    sourceUrl,
+    favorite,
+    nutrition,
+    setNutrition,
+    loading,
+    error,
+    refresh,
+    toggleFavorite,
+  };
 }

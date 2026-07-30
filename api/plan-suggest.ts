@@ -61,7 +61,9 @@ async function chooseSlugs(recipes: any[], n: number): Promise<string[]> {
           .filter(Boolean)
           .slice(0, 10)
           .join(', ');
-        return `slug: ${r.slug}\n  title: ${r.title}\n  tags: ${tags}\n  ingredients: ${ings}`;
+        const cal = Number(r.nutrition?.calories) || 0;
+        const calLine = cal ? `\n  calories_per_serving: ${cal}` : '';
+        return `slug: ${r.slug}\n  title: ${r.title}\n  tags: ${tags}\n  ingredients: ${ings}${calLine}`;
       })
       .join('\n');
     const msg = await anthropic.messages.create({
@@ -72,9 +74,10 @@ async function chooseSlugs(recipes: any[], n: number): Promise<string[]> {
         'You plan a healthy, varied week of weeknight DINNERS. From the recipes given, choose exactly N ' +
         'that are (1) health-leaning overall — favor vegetables, legumes, fish and lean protein, whole ' +
         'grains, and salads; go easy on heavy fried dishes — and (2) varied: avoid repeating the same ' +
-        'main protein or cuisine across your picks. These must be main meals — never choose a dessert, ' +
-        'sweet, or baked treat. Respond with ONLY a JSON array of exactly N recipe slugs, ' +
-        'most-recommended first, using only slugs from the list.',
+        'main protein or cuisine across your picks. When calories_per_serving is given, balance the ' +
+        "week's calorie load — mix lighter and heartier dinners rather than stacking all high-calorie " +
+        'dishes. These must be main meals — never choose a dessert, sweet, or baked treat. Respond with ' +
+        'ONLY a JSON array of exactly N recipe slugs, most-recommended first, using only slugs from the list.',
       messages: [{ role: 'user', content: `N = ${n}\n\nRecipes:\n${list}` }],
     });
     const text = msg.content
@@ -115,7 +118,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     : [];
   if (days.length === 0) return res.status(400).json({ error: 'Provide the days to fill.' });
 
-  const { data: recipes, error } = await supabase.from('recipes').select('slug, title, data, tags');
+  // Include nutrition (for calorie balancing) with a graceful fallback if the
+  // column isn't there yet.
+  let recipes: any[] | null = null;
+  let error: any = null;
+  ({ data: recipes, error } = await supabase.from('recipes').select('slug, title, data, tags, nutrition'));
+  if (error && /nutrition/i.test(error.message)) {
+    ({ data: recipes, error } = await supabase.from('recipes').select('slug, title, data, tags'));
+  }
   if (error) return res.status(500).json({ error: error.message });
   if (!recipes || recipes.length === 0) {
     return res.status(200).json({ picks: [], note: 'No saved recipes yet — import a few first.' });

@@ -128,6 +128,9 @@ export default function PlanScreen() {
   const filled = DAYS.filter((d) => plan[d.key].recipes.length > 0 || plan[d.key].note.trim()).length;
   const pickingLabel = picking ? DAYS.find((d) => d.key === picking)!.label : '';
 
+  const dayCalories = (key: Day) => plan[key].recipes.reduce((s, r) => s + (r.calories || 0), 0);
+  const weekCalories = DAYS.reduce((s, d) => s + dayCalories(d.key), 0);
+
   // A day is "open" for the randomizer only if it has no recipe and no note, so
   // we never overwrite something you've set (a recipe, or "eat out").
   const openDays = DAYS.filter((d) => plan[d.key].recipes.length === 0 && !plan[d.key].note.trim());
@@ -182,6 +185,19 @@ export default function PlanScreen() {
           >
             {filled}/7 planned
           </span>
+          {weekCalories > 0 && (
+            <span
+              style={{
+                fontFamily: "'Space Mono', monospace",
+                fontSize: 12,
+                color: 'var(--ink-soft)',
+                letterSpacing: '0.06em',
+              }}
+              title="Sum of per-serving calories across the week (estimated)"
+            >
+              ≈ {weekCalories.toLocaleString()} cal/wk
+            </span>
+          )}
           <button
             onClick={fillWeek}
             disabled={filling || openDays.length === 0}
@@ -226,6 +242,12 @@ export default function PlanScreen() {
                   onRemove={() => removeRecipe(d.key, r.id)}
                 />
               ))}
+
+              {dayCalories(d.key) > 0 && (
+                <div className="day-cal" title="Per serving, estimated">
+                  ≈ {dayCalories(d.key).toLocaleString()} cal
+                </div>
+              )}
 
               {recipes.length === 0 && !note.trim() ? (
                 // Empty day: a full-width invitation.

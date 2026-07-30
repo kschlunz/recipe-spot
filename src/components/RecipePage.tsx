@@ -144,26 +144,45 @@ function EditPanel({
 }
 
 export default function RecipePage({ slug }: { slug: string }) {
-  const { recipe, tags, photoUrl, sourceUrl, favorite, nutrition, loading, error, refresh, toggleFavorite } =
-    useRecipe(slug);
+  const {
+    recipe,
+    tags,
+    photoUrl,
+    sourceUrl,
+    favorite,
+    nutrition,
+    setNutrition,
+    loading,
+    error,
+    refresh,
+    toggleFavorite,
+  } = useRecipe(slug);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [nutriBusy, setNutriBusy] = useState(false);
   const [actionErr, setActionErr] = useState('');
+  const [infoMsg, setInfoMsg] = useState('');
   const photoRef = useRef<HTMLInputElement>(null);
   const wake = useWakeLock();
 
   const calcNutrition = async () => {
     setNutriBusy(true);
     setActionErr('');
+    setInfoMsg('');
     try {
       const res = await fetch('/api/nutrition', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ slug }),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
-      refresh();
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.nutrition) throw new Error(j.error || `HTTP ${res.status}`);
+      // Show it right away from the response…
+      setNutrition(j.nutrition);
+      // …and if it couldn't be saved (nutrition column not added yet), say so.
+      if (j.saved === false) {
+        setInfoMsg('Estimated — run the database update (nutrition column) to save it for good.');
+      }
     } catch (e) {
       setActionErr((e as Error).message);
     } finally {
@@ -313,6 +332,7 @@ export default function RecipePage({ slug }: { slug: string }) {
             </div>
           </div>
           {actionErr && <p className="status-line err">{actionErr}</p>}
+          {infoMsg && <p className="status-line">{infoMsg}</p>}
 
           {photoUrl && (
             <div className="recipe-photo">
