@@ -3,6 +3,7 @@ import { useRecipeList } from '../hooks/useRecipes';
 import type { RecipeSummary } from '../data/recipe';
 import { effectiveTags, tagKey } from '../lib/tags';
 import Heart from './Heart';
+import { FAVORITES_ENABLED } from '../lib/flags';
 
 const CAT_LIMIT = 16; // categories shown in the sidebar before "show all"
 
@@ -10,7 +11,7 @@ function RecipeCard({ r, onFav }: { r: RecipeSummary; onFav: (slug: string) => v
   const tags = effectiveTags(r.tags, r.eyebrow);
   return (
     <a className="rcard" href={`#/r/${r.slug}`}>
-      <Heart on={!!r.favorite} onClick={() => onFav(r.slug)} className="rcard-heart" />
+      {FAVORITES_ENABLED && <Heart on={!!r.favorite} onClick={() => onFav(r.slug)} className="rcard-heart" />}
       {r.eyebrow && <p className="eyebrow">{r.eyebrow}</p>}
       <h3>{r.title}</h3>
       {r.tagline && <p className="deck">{r.tagline}</p>}
@@ -116,7 +117,7 @@ export default function IndexScreen() {
               <span>All recipes</span>
               <span className="count">{recipes.length}</span>
             </button>
-            {favCount > 0 && (
+            {FAVORITES_ENABLED && favCount > 0 && (
               <button className="cat cat-fav" aria-pressed={showFavs} onClick={pickFavs}>
                 <span>♥ Favorites</span>
                 <span className="count">{favCount}</span>

@@ -53,7 +53,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (slug) {
       const { data, error } = await supabase
         .from('recipes')
-        .select('slug, title, data, source_url, tags, photo_url, favorite, created_at, updated_at')
+        // TODO(favorites): add `favorite` back once the column exists (schema update).
+        .select('slug, title, data, source_url, tags, photo_url, created_at, updated_at')
         .eq('slug', slug)
         .maybeSingle();
       if (error) return res.status(500).json({ error: error.message });
@@ -64,7 +65,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { data, error } = await supabase
       .from('recipes')
-      .select('slug, title, data, tags, photo_url, favorite')
+      // TODO(favorites): add `favorite` back once the column exists (schema update).
+      .select('slug, title, data, tags, photo_url')
       .order('created_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
 
@@ -75,7 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       tagline: row.data?.tagline ?? '',
       tags: row.tags ?? [],
       photoUrl: row.photo_url ?? null,
-      favorite: !!row.favorite,
+      favorite: false, // TODO(favorites): row.favorite once the column exists
     }));
     res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
     return res.status(200).json({ total: recipes.length, recipes });
