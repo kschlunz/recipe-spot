@@ -1,7 +1,6 @@
 // Feature flags.
 //
-// FAVORITES_ENABLED: the recipe "heart" favorites feature. Turned OFF until the
-// `favorite` column is added to the recipes table (run supabase-schema.sql).
-// To re-enable tomorrow: flip this to true AND restore the `favorite` selects in
-// api/recipes.ts (see the TODO markers there).
-export const FAVORITES_ENABLED: boolean = false;
+// FAVORITES_ENABLED: the recipe "heart" favorites feature. The recipes API
+// reads `favorite` with a graceful fallback, so this is safe to leave on even
+// if the column somehow isn't present (hearts just won't persist until it is).
+export const FAVORITES_ENABLED: boolean = true;
