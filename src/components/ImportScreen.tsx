@@ -4,6 +4,13 @@ import { buildGrid } from '../lib/recipeGrid';
 import { fileToResizedBase64, imageFromClipboard } from '../lib/image';
 import type { Nutrition, Recipe } from '../data/recipe';
 
+// Bookmarklet for paywalled/bot-blocked sites (NYT Cooking, etc.): run it on the
+// recipe page in your logged-in browser and it copies the page's schema.org
+// Recipe JSON (ingredients, steps, image, nutrition) to the clipboard. Paste
+// that into the box below and the importer lifts everything out of it.
+const BOOKMARKLET =
+  `javascript:(function(){function f(n){if(!n)return null;if(Array.isArray(n)){for(var i=0;i<n.length;i++){var r=f(n[i]);if(r)return r}return null}if(typeof n==='object'){var t=n['@type'];if(t&&(t==='Recipe'||Array.isArray(t)&&t.indexOf('Recipe')>-1))return n;if(n['@graph'])return f(n['@graph'])}return null}var s=document.querySelectorAll('script[type="application/ld+json"]'),r=null;for(var i=0;i<s.length&&!r;i++){try{r=f(JSON.parse(s[i].textContent))}catch(e){}}if(!r){alert('Recipe Spot: no recipe data found on this page.');return}var t=JSON.stringify(r);if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(function(){alert('Recipe copied! In Recipe Spot: Add a recipe, paste into the box, then Import.')},function(){window.prompt('Copy this, then paste into Recipe Spot:',t)})}else{window.prompt('Copy this, then paste into Recipe Spot:',t)}})();`;
+
 // The import flow: paste a URL or text → Claude structures it → preview in the
 // grid → optionally edit the JSON → save. The preview-before-save step is the
 // point: eyeball "when does the garlic actually go in" before it becomes your
@@ -27,7 +34,25 @@ export default function ImportScreen() {
   const [jsonErr, setJsonErr] = useState('');
 
   const [saving, setSaving] = useState(false);
+  const [bmkCopied, setBmkCopied] = useState(false);
   const photoRef = useRef<HTMLInputElement>(null);
+  const blmRef = useRef<HTMLAnchorElement>(null);
+
+  // Set the javascript: href directly so React doesn't sanitize it away; the
+  // link is for dragging to the bookmarks bar, not clicking here.
+  useEffect(() => {
+    blmRef.current?.setAttribute('href', BOOKMARKLET);
+  }, []);
+
+  const copyBookmarklet = () => {
+    navigator.clipboard.writeText(BOOKMARKLET).then(
+      () => {
+        setBmkCopied(true);
+        setTimeout(() => setBmkCopied(false), 1600);
+      },
+      () => {},
+    );
+  };
 
   const sendImport = async (body: Record<string, unknown>, statusMsg: string) => {
     setImporting(true);
@@ -239,6 +264,34 @@ export default function ImportScreen() {
             {status && <p className="status-line">{status}</p>}
             {error && <p className="status-line err">{error}</p>}
           </div>
+
+          <details className="bookmarklet-box">
+            <summary>Importing from NYT Cooking or another paywalled site?</summary>
+            <p>
+              Those sites block our reader, so grab the recipe straight from your own logged-in browser —
+              photo and nutrition come along too.
+            </p>
+            <ol>
+              <li>
+                Drag this to your bookmarks bar:{' '}
+                {/* eslint-disable-next-line jsx-a11y/anchor-is-valid */}
+                <a ref={blmRef} className="bmk-link" onClick={(e) => e.preventDefault()}>
+                  📌 Recipe Spot Grab
+                </a>
+              </li>
+              <li>On the recipe page, click that bookmark — it copies the recipe.</li>
+              <li>Come back here, paste into the box above, and hit Import.</li>
+            </ol>
+            <div className="import-actions">
+              <button type="button" onClick={copyBookmarklet}>
+                {bmkCopied ? 'Copied ✓' : 'Copy bookmarklet code'}
+              </button>
+            </div>
+            <p className="import-hint">
+              On a phone (no bookmarks bar)? Tap <b>Copy bookmarklet code</b>, make a new bookmark, and
+              paste it in as the address.
+            </p>
+          </details>
         </>
       )}
 
