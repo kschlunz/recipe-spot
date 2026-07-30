@@ -141,6 +141,33 @@ function firstImageUrl(image: any): string | null {
   return u && /^https?:\/\//i.test(u) ? u : null;
 }
 
+// Build the compact "material" string Claude structures, from a JSON-LD node.
+function materialFromLd(ld: any): string {
+  return JSON.stringify({
+    name: ld.name,
+    description: ld.description,
+    recipeYield: ld.recipeYield,
+    prepTime: ld.prepTime,
+    cookTime: ld.cookTime,
+    totalTime: ld.totalTime,
+    recipeIngredient: ld.recipeIngredient,
+    recipeInstructions: instructionsToText(ld.recipeInstructions),
+  });
+}
+
+// If pasted text is itself a schema.org Recipe JSON object (e.g. copied by the
+// bookmarklet on a paywalled site), return the recipe node so we can lift the
+// image and nutrition out of it too.
+function recipeNodeFromText(text: string): any | null {
+  const t = text.trim();
+  if (t[0] !== '{' && t[0] !== '[') return null;
+  try {
+    return findRecipeNode(JSON.parse(t));
+  } catch {
+    return null;
+  }
+}
+
 function instructionsToText(ins: any): string {
   if (!ins) return '';
   if (typeof ins === 'string') return ins;
@@ -318,16 +345,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         extractedFrom = 'schema.org JSON-LD';
         sourceNutrition = parseSourceNutrition(ld.nutrition);
         sourcePhoto = firstImageUrl(ld.image);
-        material = JSON.stringify({
-          name: ld.name,
-          description: ld.description,
-          recipeYield: ld.recipeYield,
-          prepTime: ld.prepTime,
-          cookTime: ld.cookTime,
-          totalTime: ld.totalTime,
-          recipeIngredient: ld.recipeIngredient,
-          recipeInstructions: instructionsToText(ld.recipeInstructions),
-        });
+        material = materialFromLd(ld);
       } else if (SOCIAL.test(url)) {
         // Instagram/TikTok/etc. don't share recipe data — the best we can read
         // is the post caption from the Open Graph preview tags.
@@ -345,6 +363,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else {
         extractedFrom = 'page text (no JSON-LD found)';
         material = stripHtml(html);
+      }
+    } else if (text) {
+      // Pasted text: if it's a schema.org Recipe JSON (from the bookmarklet on a
+      // paywalled site), lift the image + nutrition too instead of treating it
+      // as plain text.
+      const ld = recipeNodeFromText(text);
+      if (ld) {
+        extractedFrom = 'schema.org JSON-LD (pasted)';
+        sourceNutrition = parseSourceNutrition(ld.nutrition);
+        sourcePhoto = firstImageUrl(ld.image);
+        material = materialFromLd(ld);
       }
     }
 
