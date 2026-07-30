@@ -3,6 +3,7 @@ import RecipeView from './RecipeView';
 import CookNotes from './CookNotes';
 import { useRecipe } from '../hooks/useRecipes';
 import { useWakeLock } from '../hooks/useWakeLock';
+import Heart from './Heart';
 import { buildGrid } from '../lib/recipeGrid';
 import { effectiveTags } from '../lib/tags';
 import { fileToResizedBase64 } from '../lib/image';
@@ -142,7 +143,8 @@ function EditPanel({
 }
 
 export default function RecipePage({ slug }: { slug: string }) {
-  const { recipe, tags, photoUrl, sourceUrl, loading, error, refresh } = useRecipe(slug);
+  const { recipe, tags, photoUrl, sourceUrl, favorite, loading, error, refresh, toggleFavorite } =
+    useRecipe(slug);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionErr, setActionErr] = useState('');
@@ -241,6 +243,7 @@ export default function RecipePage({ slug }: { slug: string }) {
               ))}
             </div>
             <div className="rp-actions">
+                {editable && <Heart on={favorite} onClick={toggleFavorite} className="rp-heart" />}
                 {wake.supported && (
                   <button
                     className={'cookmode' + (wake.active ? ' on' : '')}

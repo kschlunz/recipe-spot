@@ -308,10 +308,57 @@ a {
 }
 .rcard {
   display: block;
+  position: relative;
   border: 2px solid var(--rule);
   background: var(--card);
   padding: 18px 18px 16px;
   transition: transform 0.12s, box-shadow 0.12s;
+}
+
+/* favorite heart */
+.heart {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  line-height: 0;
+  transition: transform 0.1s, color 0.1s;
+}
+.heart svg {
+  fill: none;
+  stroke: currentColor;
+}
+.heart:hover {
+  color: var(--turmeric);
+  transform: scale(1.12);
+}
+.heart.on {
+  color: var(--turmeric);
+}
+.heart.on svg {
+  fill: currentColor;
+}
+.rcard-heart {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 6px;
+}
+.rp-heart {
+  padding: 4px 6px;
+  border: 1.5px solid var(--rule);
+}
+.rp-heart.on {
+  border-color: var(--turmeric);
+}
+.cat-fav[aria-pressed='true'] {
+  border-left-color: var(--turmeric);
+  color: var(--turmeric);
+  font-weight: 700;
 }
 .rcard:hover {
   transform: translate(-2px, -2px);
@@ -332,6 +379,10 @@ a {
   letter-spacing: -0.03em;
   line-height: 1.05;
   margin: 0 0 8px;
+  padding-right: 28px;
+}
+.rcard .eyebrow {
+  padding-right: 28px;
 }
 .rcard p.deck {
   font-size: 14px;

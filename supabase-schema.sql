@@ -20,6 +20,9 @@ create index if not exists recipes_title_idx
 -- Optional dish photo per recipe (uploaded to the recipe-photos bucket below).
 alter table public.recipes add column if not exists photo_url text;
 
+-- Household favorite flag (the heart on cards and the recipe page).
+alter table public.recipes add column if not exists favorite boolean not null default false;
+
 -- Public storage bucket for dish photos. Uploads happen through the serverless
 -- functions with the service-role key; reads are public.
 insert into storage.buckets (id, name, public)

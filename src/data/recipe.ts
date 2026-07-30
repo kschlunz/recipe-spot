@@ -57,6 +57,7 @@ export type RecipeSummary = {
   tagline?: string;
   tags: string[];
   photoUrl?: string | null;
+  favorite?: boolean;
 };
 
 /* ------------------------------------------------------------------ */
