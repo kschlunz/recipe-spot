@@ -4,6 +4,7 @@ import CookNotes from './CookNotes';
 import { useRecipe } from '../hooks/useRecipes';
 import { useWakeLock } from '../hooks/useWakeLock';
 import Heart from './Heart';
+import { FAVORITES_ENABLED } from '../lib/flags';
 import { buildGrid } from '../lib/recipeGrid';
 import { effectiveTags } from '../lib/tags';
 import { fileToResizedBase64 } from '../lib/image';
@@ -243,7 +244,7 @@ export default function RecipePage({ slug }: { slug: string }) {
               ))}
             </div>
             <div className="rp-actions">
-                {editable && <Heart on={favorite} onClick={toggleFavorite} className="rp-heart" />}
+                {FAVORITES_ENABLED && editable && <Heart on={favorite} onClick={toggleFavorite} className="rp-heart" />}
                 {wake.supported && (
                   <button
                     className={'cookmode' + (wake.active ? ' on' : '')}
