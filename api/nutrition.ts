@@ -92,6 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       protein: num(parsed.protein),
       carbs: num(parsed.carbs),
       fat: num(parsed.fat),
+      source: 'estimated' as const,
     };
 
     // Persist it. If the `nutrition` column doesn't exist yet (schema not run),

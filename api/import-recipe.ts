@@ -104,6 +104,23 @@ function extractJsonLd(html: string): any | null {
   return null;
 }
 
+// schema.org NutritionInformation is defined per serving. Pull calories +
+// macros out of it when a page provides them. Values look like "520 calories"
+// or "12 g", so grab the first number. Returns null if there's nothing usable.
+function parseSourceNutrition(n: any): { calories: number; protein: number; carbs: number; fat: number; source: 'source' } | null {
+  if (!n || typeof n !== 'object') return null;
+  const num = (v: any) => {
+    const m = String(Array.isArray(v) ? v[0] : (v ?? '')).replace(/,/g, '').match(/[\d.]+/);
+    return m ? Math.round(parseFloat(m[0])) : 0;
+  };
+  const calories = num(n.calories);
+  const protein = num(n.proteinContent);
+  const carbs = num(n.carbohydrateContent);
+  const fat = num(n.fatContent);
+  if (!calories && !protein && !carbs && !fat) return null;
+  return { calories, protein, carbs, fat, source: 'source' };
+}
+
 function instructionsToText(ins: any): string {
   if (!ins) return '';
   if (typeof ins === 'string') return ins;
@@ -239,6 +256,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let material = text as string | undefined;
     let extractedFrom = 'pasted text';
     let img: ImageInput | undefined;
+    let sourceNutrition: ReturnType<typeof parseSourceNutrition> = null;
 
     if (image) {
       extractedFrom = 'photo';
@@ -277,6 +295,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const ld = extractJsonLd(html);
       if (ld) {
         extractedFrom = 'schema.org JSON-LD';
+        sourceNutrition = parseSourceNutrition(ld.nutrition);
         material = JSON.stringify({
           name: ld.name,
           description: ld.description,
@@ -330,7 +349,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : [];
     delete recipe.tags;
 
-    return res.status(200).json({ recipe, tags, source: url ?? null, extractedFrom });
+    return res.status(200).json({ recipe, tags, source: url ?? null, extractedFrom, nutrition: sourceNutrition });
   } catch (e: any) {
     return res.status(500).json({ error: e.message });
   }

@@ -165,7 +165,7 @@ export default function RecipeView({ recipe, nutrition }: Props) {
           <span>
             <b>{nutrition.fat}g</b> fat
           </span>
-          <span className="est">estimated</span>
+          <span className="est">{nutrition.source === 'source' ? 'from source' : 'estimated'}</span>
         </div>
       )}
 

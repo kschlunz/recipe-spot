@@ -98,20 +98,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === 'POST') {
-    const { recipe, source_url, tags } = req.body ?? {};
+    const { recipe, source_url, tags, nutrition } = req.body ?? {};
     if (!recipe || !recipe.title || !Array.isArray(recipe.ingredients) || !Array.isArray(recipe.steps)) {
       return res.status(400).json({ error: 'Provide a valid recipe with title, ingredients, and steps.' });
     }
 
     try {
       const slug = await uniqueSlug(supabase, slugify(recipe.title));
-      const { error } = await supabase.from('recipes').insert({
+      const base = {
         slug,
         title: recipe.title,
         data: recipe,
         source_url: source_url ?? null,
         tags: Array.isArray(tags) ? tags : [],
-      });
+      };
+      // Save nutrition inline when provided (e.g. lifted from the source page).
+      // If the column isn't there yet, retry without it so the save still works.
+      const withNutrition = nutrition && typeof nutrition === 'object' ? { ...base, nutrition } : base;
+      let { error } = await supabase.from('recipes').insert(withNutrition);
+      if (error && nutrition && /nutrition/i.test(error.message)) {
+        ({ error } = await supabase.from('recipes').insert(base));
+      }
       if (error) return res.status(500).json({ error: error.message });
       return res.status(201).json({ slug });
     } catch (e: any) {

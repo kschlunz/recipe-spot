@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import RecipeView from './RecipeView';
 import { buildGrid } from '../lib/recipeGrid';
 import { fileToResizedBase64 } from '../lib/image';
-import type { Recipe } from '../data/recipe';
+import type { Nutrition, Recipe } from '../data/recipe';
 
 // The import flow: paste a URL or text → Claude structures it → preview in the
 // grid → optionally edit the JSON → save. The preview-before-save step is the
@@ -19,6 +19,7 @@ export default function ImportScreen() {
   const [source, setSource] = useState<string | null>(null);
   const [extractedFrom, setExtractedFrom] = useState('');
   const [tags, setTags] = useState('');
+  const [sourceNutrition, setSourceNutrition] = useState<Nutrition | null>(null);
 
   const [jsonOpen, setJsonOpen] = useState(false);
   const [jsonText, setJsonText] = useState('');
@@ -41,8 +42,14 @@ export default function ImportScreen() {
       // Read as text first — a timed-out or crashed function returns an empty
       // or HTML body that res.json() would choke on ("Unexpected end of JSON").
       const raw = await res.text();
-      let json: { recipe?: Recipe; source?: string | null; extractedFrom?: string; tags?: string[]; error?: string } =
-        {};
+      let json: {
+        recipe?: Recipe;
+        source?: string | null;
+        extractedFrom?: string;
+        tags?: string[];
+        nutrition?: Nutrition | null;
+        error?: string;
+      } = {};
       try {
         json = raw ? JSON.parse(raw) : {};
       } catch {
@@ -57,6 +64,7 @@ export default function ImportScreen() {
       setDraft(json.recipe);
       setSource(json.source ?? null);
       setExtractedFrom(json.extractedFrom ?? '');
+      setSourceNutrition(json.nutrition ?? null);
       if (Array.isArray(json.tags) && json.tags.length) setTags(json.tags.join(', '));
       setJsonText(JSON.stringify(json.recipe, null, 2));
       setJsonErr('');
@@ -115,6 +123,7 @@ export default function ImportScreen() {
         body: JSON.stringify({
           recipe: draft,
           source_url: source,
+          nutrition: sourceNutrition, // use the source's own numbers when present
           tags: tags
             .split(',')
             .map((t) => t.trim())
@@ -123,13 +132,16 @@ export default function ImportScreen() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-      // Kick off nutrition estimation for the new recipe (fire-and-forget — the
-      // recipe page shows a "Calculate nutrition" button if it isn't ready yet).
-      fetch('/api/nutrition', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ slug: json.slug }),
-      }).catch(() => {});
+      // Only estimate with Claude when the source didn't provide nutrition.
+      // (Fire-and-forget — the recipe page shows a "Calculate nutrition" button
+      // if it isn't ready yet.)
+      if (!sourceNutrition) {
+        fetch('/api/nutrition', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ slug: json.slug }),
+        }).catch(() => {});
+      }
       window.location.hash = `#/r/${json.slug}`;
     } catch (e) {
       setError((e as Error).message);
