@@ -11,11 +11,13 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 const anthropic = new Anthropic();
+// Fast model for the first structuring pass (keeps imports well under the
+// timeout); the slower, stronger model is only used to repair an invalid tree.
+const FAST_MODEL = 'claude-haiku-4-5';
 const MODEL = 'claude-sonnet-5';
 
-// Give the function room for a page fetch plus up to two Claude calls (the
-// default 10s limit times out on long recipes and returns an empty 500).
-export const config = { maxDuration: 60 };
+// Give the function room for a page fetch plus up to two Claude calls.
+export const config = { maxDuration: 300 };
 
 /* ---------- schema the renderer expects ---------- */
 const SCHEMA_DOC = `{
@@ -257,7 +259,12 @@ function validateRecipe(r: any): string | null {
 /* ---------- Claude call ---------- */
 type ImageInput = { mediaType: string; data: string };
 
-async function convert(sourceLabel: string, material: string, image?: ImageInput): Promise<any> {
+async function convert(
+  sourceLabel: string,
+  material: string,
+  image?: ImageInput,
+  model: string = MODEL,
+): Promise<any> {
   const content: Anthropic.ContentBlockParam[] = [];
   if (image) {
     content.push({
@@ -271,7 +278,7 @@ async function convert(sourceLabel: string, material: string, image?: ImageInput
   });
 
   const message = await anthropic.messages.create({
-    model: MODEL,
+    model,
     max_tokens: 8192,
     system: `You convert recipes into a strict JSON schema for a Cooking for
 Engineers-style tabular renderer, where ingredients are tree leaves and each
@@ -377,7 +384,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    let recipe = await convert(extractedFrom, material ?? '', img);
+    // First pass on the fast model; only escalate to the stronger model to
+    // repair a structurally invalid tree.
+    let recipe = await convert(extractedFrom, material ?? '', img, FAST_MODEL);
 
     // one repair pass if the tree is invalid (text-only — the model already
     // read the photo, and it now just needs to fix the tree structure)
