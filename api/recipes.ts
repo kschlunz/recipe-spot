@@ -51,12 +51,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const slug = typeof req.query.slug === 'string' ? req.query.slug : '';
 
     if (slug) {
-      const { data, error } = await supabase
+      // TODO(favorites): add `favorite` back once the column exists (schema update).
+      const BASE = 'slug, title, data, source_url, tags, photo_url, created_at, updated_at';
+      // Try to include nutrition; if that column isn't there yet (schema not run),
+      // fall back gracefully so recipe loading never breaks.
+      let { data, error } = await supabase
         .from('recipes')
-        // TODO(favorites): add `favorite` back once the column exists (schema update).
-        .select('slug, title, data, source_url, tags, photo_url, created_at, updated_at')
+        .select(`${BASE}, nutrition`)
         .eq('slug', slug)
         .maybeSingle();
+      if (error && /nutrition/i.test(error.message)) {
+        ({ data, error } = await supabase.from('recipes').select(BASE).eq('slug', slug).maybeSingle());
+      }
       if (error) return res.status(500).json({ error: error.message });
       if (!data) return res.status(404).json({ error: 'Recipe not found' });
       res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');

@@ -123,6 +123,13 @@ export default function ImportScreen() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      // Kick off nutrition estimation for the new recipe (fire-and-forget — the
+      // recipe page shows a "Calculate nutrition" button if it isn't ready yet).
+      fetch('/api/nutrition', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ slug: json.slug }),
+      }).catch(() => {});
       window.location.hash = `#/r/${json.slug}`;
     } catch (e) {
       setError((e as Error).message);

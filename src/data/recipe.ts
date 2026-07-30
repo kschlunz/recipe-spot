@@ -50,6 +50,15 @@ export type RecipeRow = {
 };
 
 // A recipe card summary for the index list.
+// Estimated per-serving nutrition, stored on the recipe row (not in the recipe
+// data blob). Numbers are grams except calories (kcal).
+export type Nutrition = {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+};
+
 export type RecipeSummary = {
   slug: string;
   title: string;

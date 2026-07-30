@@ -1,0 +1,98 @@
+// api/nutrition.ts — estimate per-serving nutrition for a recipe from its
+// ingredient list, using Claude, and store it on the recipe row.
+//
+//   POST /api/nutrition  { slug }  → { nutrition: { calories, protein, carbs, fat } }
+//
+// Estimates only — labeled as such in the UI. Numbers are per single serving,
+// so they don't change with the recipe's serving multiplier.
+
+import Anthropic from '@anthropic-ai/sdk';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+export const config = { maxDuration: 30 };
+
+const anthropic = new Anthropic();
+const MODEL = 'claude-sonnet-5';
+
+function client(res: VercelResponse): SupabaseClient | null {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    res.status(500).json({ error: 'Supabase not configured' });
+    return null;
+  }
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
+const num = (v: any) => {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+};
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: 'Nutrition estimation is not configured.' });
+  }
+
+  const slug = typeof (req.body ?? {}).slug === 'string' ? req.body.slug : '';
+  if (!slug) return res.status(400).json({ error: 'Provide a recipe slug.' });
+
+  const supabase = client(res);
+  if (!supabase) return;
+
+  const { data: row, error } = await supabase
+    .from('recipes')
+    .select('slug, title, data')
+    .eq('slug', slug)
+    .maybeSingle();
+  if (error) return res.status(500).json({ error: error.message });
+  if (!row) return res.status(404).json({ error: 'Recipe not found' });
+
+  const recipe = (row as any).data ?? {};
+  const serves = Number(recipe.serves) || 4;
+  const lines = ((recipe.ingredients ?? []) as any[])
+    .map((g) => {
+      const amt = g.us && g.us.q ? `${g.us.q} ${g.us.u ?? ''}` : g.metric && g.metric.q ? `${g.metric.q} ${g.metric.u ?? ''}` : '';
+      return `- ${amt} ${g.name ?? ''}${g.note ? ` (${g.note})` : ''}`.replace(/\s+/g, ' ').trim();
+    })
+    .join('\n');
+
+  try {
+    const msg = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 200,
+      system:
+        'You estimate recipe nutrition. Given a full ingredient list and how many servings the recipe ' +
+        'makes, estimate the nutrition PER SERVING using standard food composition values. Divide totals ' +
+        'by the number of servings. Respond with ONLY a JSON object of numbers: ' +
+        '{"calories": <kcal>, "protein": <g>, "carbs": <g>, "fat": <g>}. Integers, per one serving, no ' +
+        'ranges, no text, no units in the values.',
+      messages: [{ role: 'user', content: `Servings: ${serves}\n\nIngredients:\n${lines}` }],
+    });
+    const text = msg.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('')
+      .replace(/```json|```/g, '')
+      .trim();
+    const parsed = JSON.parse(text);
+    const nutrition = {
+      calories: num(parsed.calories),
+      protein: num(parsed.protein),
+      carbs: num(parsed.carbs),
+      fat: num(parsed.fat),
+    };
+
+    const { error: upErr } = await supabase.from('recipes').update({ nutrition }).eq('slug', slug);
+    if (upErr) return res.status(500).json({ error: upErr.message });
+
+    return res.status(200).json({ nutrition });
+  } catch (e) {
+    return res.status(502).json({ error: `Could not estimate nutrition: ${(e as Error).message}` });
+  }
+}
