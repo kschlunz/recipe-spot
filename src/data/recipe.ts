@@ -57,6 +57,7 @@ export type Nutrition = {
   protein: number;
   carbs: number;
   fat: number;
+  source?: 'source' | 'estimated'; // where the numbers came from
 };
 
 export type RecipeSummary = {
