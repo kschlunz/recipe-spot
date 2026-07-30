@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import RecipeView from './RecipeView';
 import CookNotes from './CookNotes';
 import { useRecipe } from '../hooks/useRecipes';
@@ -7,7 +7,7 @@ import Heart from './Heart';
 import { FAVORITES_ENABLED } from '../lib/flags';
 import { buildGrid } from '../lib/recipeGrid';
 import { effectiveTags } from '../lib/tags';
-import { fileToResizedBase64 } from '../lib/image';
+import { fileToResizedBase64, imageFromClipboard } from '../lib/image';
 import { STEW, type Recipe } from '../data/recipe';
 import { DAYS, type Day } from '../hooks/useMealPlan';
 
@@ -230,6 +230,22 @@ export default function RecipePage({ slug }: { slug: string }) {
   const shown = recipe ?? (slug === 'the-stew' ? STEW : null);
   const editable = recipe !== null; // only DB-backed recipes can be edited
 
+  // Paste an image anywhere on the page to set the dish photo.
+  const uploadRef = useRef(uploadPhoto);
+  uploadRef.current = uploadPhoto;
+  useEffect(() => {
+    if (!editable) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const f = imageFromClipboard(e);
+      if (f) {
+        e.preventDefault();
+        uploadRef.current(f);
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [editable]);
+
   const duplicate = async () => {
     if (!recipe) return;
     setBusy(true);
@@ -303,8 +319,12 @@ export default function RecipePage({ slug }: { slug: string }) {
                     <button className="rp-edit" onClick={() => setEditing((v) => !v)}>
                       {editing ? 'Close editor' : 'Edit recipe'}
                     </button>
-                    <button onClick={() => photoRef.current?.click()} disabled={busy}>
-                      {photoUrl ? 'Change photo' : 'Add photo'}
+                    <button
+                      onClick={() => photoRef.current?.click()}
+                      disabled={busy}
+                      title="Pick a file — or paste an image anywhere on this page"
+                    >
+                      {busy ? 'Uploading…' : photoUrl ? 'Change photo' : 'Add photo'}
                     </button>
                     {photoUrl && (
                       <button onClick={removePhoto} disabled={busy}>
@@ -333,6 +353,9 @@ export default function RecipePage({ slug }: { slug: string }) {
           </div>
           {actionErr && <p className="status-line err">{actionErr}</p>}
           {infoMsg && <p className="status-line">{infoMsg}</p>}
+          {editable && !photoUrl && (
+            <p className="rp-hint">Add a dish photo — pick a file, or paste an image (⌘/Ctrl-V).</p>
+          )}
 
           {photoUrl && (
             <div className="recipe-photo">

@@ -121,6 +121,26 @@ function parseSourceNutrition(n: any): { calories: number; protein: number; carb
   return { calories, protein, carbs, fat, source: 'source' };
 }
 
+// schema.org `image` can be a URL string, an array, or an ImageObject (with a
+// `url`), or arrays of those. Return the first usable absolute URL.
+function firstImageUrl(image: any): string | null {
+  const pick = (v: any): string | null => {
+    if (!v) return null;
+    if (typeof v === 'string') return v;
+    if (Array.isArray(v)) {
+      for (const x of v) {
+        const u = pick(x);
+        if (u) return u;
+      }
+      return null;
+    }
+    if (typeof v === 'object') return pick(v.url);
+    return null;
+  };
+  const u = pick(image);
+  return u && /^https?:\/\//i.test(u) ? u : null;
+}
+
 function instructionsToText(ins: any): string {
   if (!ins) return '';
   if (typeof ins === 'string') return ins;
@@ -257,6 +277,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let extractedFrom = 'pasted text';
     let img: ImageInput | undefined;
     let sourceNutrition: ReturnType<typeof parseSourceNutrition> = null;
+    let sourcePhoto: string | null = null;
 
     if (image) {
       extractedFrom = 'photo';
@@ -296,6 +317,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (ld) {
         extractedFrom = 'schema.org JSON-LD';
         sourceNutrition = parseSourceNutrition(ld.nutrition);
+        sourcePhoto = firstImageUrl(ld.image);
         material = JSON.stringify({
           name: ld.name,
           description: ld.description,
@@ -349,7 +371,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : [];
     delete recipe.tags;
 
-    return res.status(200).json({ recipe, tags, source: url ?? null, extractedFrom, nutrition: sourceNutrition });
+    return res
+      .status(200)
+      .json({ recipe, tags, source: url ?? null, extractedFrom, nutrition: sourceNutrition, photo: sourcePhoto });
   } catch (e: any) {
     return res.status(500).json({ error: e.message });
   }
