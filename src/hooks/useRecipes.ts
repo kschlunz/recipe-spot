@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Recipe, RecipeSummary } from '../data/recipe';
+import type { Nutrition, Recipe, RecipeSummary } from '../data/recipe';
 import { useRefreshOnFocus } from './useRefreshOnFocus';
 
 // List all recipe card summaries from /api/recipes.
@@ -59,6 +59,7 @@ export function useRecipe(slug: string) {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [favorite, setFavorite] = useState(false);
+  const [nutrition, setNutrition] = useState<Nutrition | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,6 +77,7 @@ export function useRecipe(slug: string) {
           setPhotoUrl(json.recipe?.photo_url ?? null);
           setSourceUrl(json.recipe?.source_url ?? null);
           setFavorite(!!json.recipe?.favorite);
+          setNutrition(json.recipe?.nutrition ?? null);
         }
       } catch (e) {
         if (alive()) setError((e as Error).message);
@@ -92,6 +94,7 @@ export function useRecipe(slug: string) {
     setTags([]);
     setPhotoUrl(null);
     setSourceUrl(null);
+    setNutrition(null);
     load(() => on);
     return () => {
       on = false;
@@ -110,5 +113,5 @@ export function useRecipe(slug: string) {
     }).catch(() => setFavorite(!next));
   }, [favorite, slug]);
 
-  return { recipe, tags, photoUrl, sourceUrl, favorite, loading, error, refresh, toggleFavorite };
+  return { recipe, tags, photoUrl, sourceUrl, favorite, nutrition, loading, error, refresh, toggleFavorite };
 }

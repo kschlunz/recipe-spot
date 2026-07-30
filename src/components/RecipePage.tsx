@@ -144,13 +144,32 @@ function EditPanel({
 }
 
 export default function RecipePage({ slug }: { slug: string }) {
-  const { recipe, tags, photoUrl, sourceUrl, favorite, loading, error, refresh, toggleFavorite } =
+  const { recipe, tags, photoUrl, sourceUrl, favorite, nutrition, loading, error, refresh, toggleFavorite } =
     useRecipe(slug);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [nutriBusy, setNutriBusy] = useState(false);
   const [actionErr, setActionErr] = useState('');
   const photoRef = useRef<HTMLInputElement>(null);
   const wake = useWakeLock();
+
+  const calcNutrition = async () => {
+    setNutriBusy(true);
+    setActionErr('');
+    try {
+      const res = await fetch('/api/nutrition', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ slug }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+      refresh();
+    } catch (e) {
+      setActionErr((e as Error).message);
+    } finally {
+      setNutriBusy(false);
+    }
+  };
 
   const uploadPhoto = async (file: File) => {
     setBusy(true);
@@ -255,6 +274,11 @@ export default function RecipePage({ slug }: { slug: string }) {
                   </button>
                 )}
                 <button onClick={() => window.print()}>Print</button>
+                {editable && !nutrition && (
+                  <button onClick={calcNutrition} disabled={nutriBusy}>
+                    {nutriBusy ? 'Estimating…' : 'Calculate nutrition'}
+                  </button>
+                )}
                 {editable && (
                   <>
                     <button className="rp-edit" onClick={() => setEditing((v) => !v)}>
@@ -306,7 +330,7 @@ export default function RecipePage({ slug }: { slug: string }) {
             />
           )}
 
-          <RecipeView recipe={shown} />
+          <RecipeView recipe={shown} nutrition={nutrition} />
           {sourceUrl && (
             <p className="recipe-source">
               Source:{' '}

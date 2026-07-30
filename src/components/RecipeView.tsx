@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Recipe, Ingredient } from '../data/recipe';
+import type { Recipe, Ingredient, Nutrition } from '../data/recipe';
 import { beep, buildGrid, fmtClock, frac, metricRound, type Span } from '../lib/recipeGrid';
 
 type Props = {
   recipe: Recipe;
+  nutrition?: Nutrition | null;
 };
 
 // The tabular renderer: a read + cook view for a single recipe. Every rowspan
 // is computed by buildGrid from the recipe tree.
-export default function RecipeView({ recipe }: Props) {
+export default function RecipeView({ recipe, nutrition }: Props) {
   const [mult, setMult] = useState(1);
   const [units, setUnits] = useState<'us' | 'si'>('us');
   const [struck, setStruck] = useState<Set<string>>(() => new Set());
@@ -148,6 +149,25 @@ export default function RecipeView({ recipe }: Props) {
           </span>
         )}
       </p>
+
+      {nutrition && (
+        <div className="nutrition">
+          <span className="nl">Per serving</span>
+          <span>
+            <b>{nutrition.calories}</b> cal
+          </span>
+          <span>
+            <b>{nutrition.protein}g</b> protein
+          </span>
+          <span>
+            <b>{nutrition.carbs}g</b> carbs
+          </span>
+          <span>
+            <b>{nutrition.fat}g</b> fat
+          </span>
+          <span className="est">estimated</span>
+        </div>
+      )}
 
       <div className="controls">
         <div className="group">
