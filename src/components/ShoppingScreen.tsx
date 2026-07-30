@@ -27,6 +27,7 @@ const lineOf = (it: Item) => {
 
 export default function ShoppingScreen() {
   const [items, setItems] = useState<Item[]>([]);
+  const [spices, setSpices] = useState<Item[]>([]);
   const [noteItems, setNoteItems] = useState<Item[]>([]);
   const [recipes, setRecipes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +47,7 @@ export default function ShoppingScreen() {
       if (!shopRes.ok) throw new Error((await shopRes.json().catch(() => ({}))).error || `HTTP ${shopRes.status}`);
       const json = await shopRes.json();
       setItems(json.items ?? []);
+      setSpices(json.spices ?? []);
       setNoteItems(json.noteItems ?? []);
       setRecipes(json.recipes ?? []);
       setError(null);
@@ -65,7 +67,7 @@ export default function ShoppingScreen() {
   }, [load]);
   useRefreshOnFocus(() => load(true));
 
-  const allItems = useMemo(() => [...items, ...noteItems], [items, noteItems]);
+  const allItems = useMemo(() => [...items, ...spices, ...noteItems], [items, spices, noteItems]);
   const remaining = useMemo(
     () => allItems.filter((it) => !checked.has(keyOf(it))).length,
     [allItems, checked],
@@ -186,6 +188,14 @@ export default function ShoppingScreen() {
             make them tickable.
           </p>
           {items.length > 0 && <ul className="shop-list">{items.map(renderItem)}</ul>}
+
+          {spices.length > 0 && (
+            <>
+              <h2 className="shop-section">Spices &amp; seasonings</h2>
+              <p className="shop-section-hint">You probably have these — tick off what's already in the cupboard.</p>
+              <ul className="shop-list">{spices.map(renderItem)}</ul>
+            </>
+          )}
 
           {noteItems.length > 0 && (
             <>

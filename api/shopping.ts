@@ -48,6 +48,21 @@ type Group = {
   sources: Set<string>;
 };
 
+// Dried spices, seasonings, and pantry herbs — the stuff you usually already
+// have on the shelf. Heuristic (name match); fresh herbs and produce are
+// deliberately excluded so they stay on the main buy list.
+const SPICE_RE =
+  /\b(salt|seasoning|italian seasoning|cajun|creole|old bay|taco seasoning|curry powder|garam masala|five[- ]?spice|za'?atar|ras el hanout|herbes de provence|cumin|turmeric|paprika|cinnamon|nutmeg|cardamom|allspice|cloves?|coriander|cayenne|chili powder|chile powder|chili flakes?|red pepper flakes?|crushed red pepper|fennel seeds?|mustard seeds?|mustard powder|dry mustard|caraway|celery seeds?|celery salt|saffron|sumac|fenugreek|mace|star anise|anise|onion powder|garlic powder|ground ginger|peppercorns?|black pepper|white pepper|oregano|thyme|rosemary|sage|marjoram|bay leaf|bay leaves|tarragon)\b/i;
+
+function isSpice(name: string): boolean {
+  const n = name.toLowerCase();
+  if (/\bfresh\b/.test(n)) return false; // fresh herbs / produce
+  if (/bell pepper/.test(n)) return false; // a vegetable, not the spice
+  if (/\bgarlic\b/.test(n) && !/garlic powder/.test(n)) return false; // fresh garlic
+  if (/\bginger\b/.test(n) && !/ground ginger/.test(n)) return false; // fresh ginger
+  return SPICE_RE.test(n);
+}
+
 async function groceriesFromNotes(notes: string[]): Promise<string[]> {
   const usable = notes.map((n) => n.trim()).filter((n) => n && !NOTE_SKIP.test(n));
   if (usable.length === 0 || !process.env.ANTHROPIC_API_KEY) return [];
@@ -140,7 +155,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  const items = [...groups.values()]
+  const allRecipeItems = [...groups.values()]
     .map((grp) => ({
       name: grp.name,
       note: grp.note,
@@ -149,6 +164,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sources: [...grp.sources],
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
+
+  // Spices/seasonings get their own section — the user usually has these.
+  const spices = allRecipeItems.filter((it) => isSpice(it.name));
+  const items = allRecipeItems.filter((it) => !isSpice(it.name));
 
   // --- groceries extracted from day notes, kept in their own "your notes" list ---
   // Drop anything a planned recipe already covers, so this list is only the
@@ -161,5 +180,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .sort((a, b) => a.name.localeCompare(b.name));
 
   res.setHeader('Cache-Control', 'no-store');
-  return res.status(200).json({ items, noteItems, recipes: [...recipeTitles] });
+  return res.status(200).json({ items, spices, noteItems, recipes: [...recipeTitles] });
 }
