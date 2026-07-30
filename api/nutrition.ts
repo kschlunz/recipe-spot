@@ -88,10 +88,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       fat: num(parsed.fat),
     };
 
+    // Persist it. If the `nutrition` column doesn't exist yet (schema not run),
+    // don't fail — still return the estimate so the page can show it this
+    // session, and flag that it wasn't saved.
     const { error: upErr } = await supabase.from('recipes').update({ nutrition }).eq('slug', slug);
-    if (upErr) return res.status(500).json({ error: upErr.message });
+    const saved = !upErr;
 
-    return res.status(200).json({ nutrition });
+    return res.status(200).json({ nutrition, saved });
   } catch (e) {
     return res.status(502).json({ error: `Could not estimate nutrition: ${(e as Error).message}` });
   }

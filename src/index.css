@@ -1152,6 +1152,14 @@ tr.hot td.ing {
   min-width: 1.2em;
   text-align: center;
 }
+.day-cal {
+  margin-top: 8px;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--kale);
+  font-weight: 700;
+}
 .day-note {
   width: 100%;
   margin-top: 10px;

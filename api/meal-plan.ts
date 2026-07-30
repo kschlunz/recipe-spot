@@ -40,6 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       tagline?: string;
       serves?: number;
       servings: number | null;
+      calories?: number | null;
     };
     type Entry = { recipes: Recipe[]; note: string };
     const plan: Record<string, Entry> = {};
@@ -64,12 +65,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const slugs = [...new Set((rows ?? []).map((r: any) => r.recipe_slug))];
     const bySlug = new Map<string, any>();
     if (slugs.length > 0) {
-      const { data: recipes, error: rErr } = await supabase
+      // Try to include nutrition for day-card calories; fall back if the column
+      // isn't there yet.
+      let recipesData: any[] | null = null;
+      let rErr: any = null;
+      ({ data: recipesData, error: rErr } = await supabase
         .from('recipes')
-        .select('slug, title, data')
-        .in('slug', slugs);
+        .select('slug, title, data, nutrition')
+        .in('slug', slugs));
+      if (rErr && /nutrition/i.test(rErr.message)) {
+        ({ data: recipesData, error: rErr } = await supabase
+          .from('recipes')
+          .select('slug, title, data')
+          .in('slug', slugs));
+      }
       if (rErr) return res.status(500).json({ error: rErr.message });
-      (recipes ?? []).forEach((r: any) => bySlug.set(r.slug, r));
+      (recipesData ?? []).forEach((r: any) => bySlug.set(r.slug, r));
     }
 
     for (const row of rows ?? []) {
@@ -85,6 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         tagline: r.data?.tagline ?? '',
         serves: Number(r.data?.serves) || undefined,
         servings: (row as any).servings ?? null,
+        calories: Number(r.nutrition?.calories) || null,
       });
     }
 

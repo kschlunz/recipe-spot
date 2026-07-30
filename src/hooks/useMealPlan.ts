@@ -17,7 +17,7 @@ export type Day = (typeof DAYS)[number]['key'];
 export type PlanEntry = { slug: string; title: string; eyebrow?: string; tagline?: string; serves?: number };
 // A recipe placed on a day: a PlanEntry plus its meal_plan_recipes row id and
 // its per-dish target servings.
-export type PlanRecipe = PlanEntry & { id: string; servings: number | null };
+export type PlanRecipe = PlanEntry & { id: string; servings: number | null; calories?: number | null };
 export type DayPlan = { recipes: PlanRecipe[]; note: string };
 export type Plan = Record<Day, DayPlan>;
 
