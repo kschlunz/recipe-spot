@@ -153,6 +153,29 @@ function firstImageUrl(image: any): string | null {
   return u && /^https?:\/\//i.test(u) ? u : null;
 }
 
+// The recipe's own URL from a JSON-LD node — url / mainEntityOfPage / @id, which
+// may be a string, an object with url/@id, or protocol-relative ("//nyt...").
+function urlFromLd(ld: any): string | null {
+  const pick = (v: any): string | null => {
+    if (!v) return null;
+    if (typeof v === 'string') return v;
+    if (Array.isArray(v)) {
+      for (const x of v) {
+        const u = pick(x);
+        if (u) return u;
+      }
+      return null;
+    }
+    if (typeof v === 'object') return pick(v['@id'] ?? v.url);
+    return null;
+  };
+  let u = pick(ld?.url) || pick(ld?.mainEntityOfPage) || pick(ld?.['@id']);
+  if (!u) return null;
+  u = u.trim();
+  if (u.startsWith('//')) u = 'https:' + u;
+  return /^https?:\/\//i.test(u) ? u : null;
+}
+
 // Build the compact "material" string Claude structures, from a JSON-LD node.
 function materialFromLd(ld: any): string {
   return JSON.stringify({
@@ -322,6 +345,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let img: ImageInput | undefined;
     let sourceNutrition: ReturnType<typeof parseSourceNutrition> = null;
     let sourcePhoto: string | null = null;
+    let sourceUrl: string | null = null;
 
     if (image) {
       extractedFrom = 'photo';
@@ -390,6 +414,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         extractedFrom = 'schema.org JSON-LD (pasted)';
         sourceNutrition = parseSourceNutrition(ld.nutrition);
         sourcePhoto = firstImageUrl(ld.image);
+        sourceUrl = urlFromLd(ld); // the recipe's own link (e.g. NYT), for the source line
         material = materialFromLd(ld);
       }
     }
@@ -419,9 +444,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : [];
     delete recipe.tags;
 
-    return res
-      .status(200)
-      .json({ recipe, tags, source: url ?? null, extractedFrom, nutrition: sourceNutrition, photo: sourcePhoto });
+    return res.status(200).json({
+      recipe,
+      tags,
+      source: url ?? sourceUrl ?? null,
+      extractedFrom,
+      nutrition: sourceNutrition,
+      photo: sourcePhoto,
+    });
   } catch (e: any) {
     return res.status(500).json({ error: e.message });
   }
