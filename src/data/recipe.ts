@@ -19,6 +19,10 @@ export type Step = {
   seconds: number;
   title: string;
   inputs: string[];
+  // Cooking heat as the source states it: a level ("medium-high"), a temp
+  // ("400°F"), or a cue ("hand-test 4–5 sec"). Optional; only for steps that
+  // apply heat (grill, stovetop, oven, broil).
+  heat?: string;
 };
 
 export type Note = { h: string; p: string };

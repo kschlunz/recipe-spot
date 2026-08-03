@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Recipe, Ingredient, Nutrition } from '../data/recipe';
 import { beep, buildGrid, fmtClock, frac, metricRound, type Span } from '../lib/recipeGrid';
+import { effectiveHeats, formatHeat } from '../lib/heat';
 
 type Props = {
   recipe: Recipe;
@@ -106,6 +107,14 @@ export default function RecipeView({ recipe, nutrition }: Props) {
     return { entering, carries };
   };
 
+  // Heat per step, carrying the last stated heat forward to later cooking steps.
+  const heatById = useMemo(() => {
+    const heats = effectiveHeats(recipe.steps);
+    const m: Record<string, string | null> = {};
+    recipe.steps.forEach((s, i) => (m[s.id] = heats[i]));
+    return m;
+  }, [recipe]);
+
   type Cell =
     | { kind: 'gap'; key: string; rowSpan: number }
     | { kind: 'step'; key: string; sp: Span; j: number; rowSpan: number };
@@ -206,6 +215,9 @@ export default function RecipeView({ recipe, nutrition }: Props) {
             Stage {step + 1} of {nCols}
           </span>
           <span className="stage-t">{spans[step].step.title || spans[step].step.verb}</span>
+          {heatById[spans[step].step.id] && (
+            <span className="stage-heat">🔥 {formatHeat(heatById[spans[step].step.id]!)}</span>
+          )}
           <button onClick={() => goTo(step - 1)}>Back</button>
           <button onClick={() => goTo(step + 1)}>Next</button>
           <button onClick={exitCook}>Exit</button>
@@ -257,6 +269,9 @@ export default function RecipeView({ recipe, nutrition }: Props) {
                         >
                           <b>{c.sp.step.verb}</b>
                           {c.sp.step.detail && <span>{c.sp.step.detail}</span>}
+                          {heatById[c.sp.step.id] && (
+                            <span className="op-heat">🔥 {formatHeat(heatById[c.sp.step.id]!)}</span>
+                          )}
                         </td>
                       ),
                     )}
@@ -305,6 +320,9 @@ export default function RecipeView({ recipe, nutrition }: Props) {
                     <div className="s-top">
                       <b>{sp.step.verb}</b>
                       {sp.step.detail && <span className="s-detail">{sp.step.detail}</span>}
+                      {heatById[sp.step.id] && (
+                        <span className="s-heat">🔥 {formatHeat(heatById[sp.step.id]!)}</span>
+                      )}
                     </div>
                     {(carries || entering.length > 0) && (
                       <div className="s-ings">
