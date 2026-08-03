@@ -40,6 +40,7 @@ const SCHEMA_DOC = `{
       "detail": string,       // timing/technique, e.g. "8-10 min · stir often"
       "seconds": number,      // timer for cook mode; 0 if untimed
       "title": string,        // full sentence for the cook-mode stage bar
+      "heat": string?,        // cooking heat, if any — see rule 9
       "inputs": [string] }    // ingredient ids AND/OR earlier step ids
   ],
   "notes": [ { "h": string, "p": string } ],   // tips, storage, substitutions
@@ -73,7 +74,16 @@ const RULES = `Rules:
    cuisine (mexican, italian, thai), main ingredient (chicken, beans, pasta),
    and method/effort (one-pot, sheet-pan, no-cook, make-ahead, slow-cooker).
    Keep each to 1-2 words, generic enough that other recipes would share them.
-8. Respond with ONLY the JSON object. No markdown fences, no preamble.`;
+9. HEAT: for any step that applies heat (grill, stovetop, oven, broil, fry,
+   sear, roast, bake, simmer), set "heat" to what the source states — a level
+   ("medium-high"), a temperature ("400°F", "180°C"), or a cue ("hand-test
+   4–5 sec"). If the recipe sets a heat once (e.g. "light the grill to
+   medium-high") and a later cooking step doesn't restate it, CARRY THAT HEAT
+   FORWARD: repeat the last stated heat on each subsequent cooking step. Do NOT
+   put "heat" on non-cooking steps (mixing, resting, assembling, garnishing) —
+   omit the field there. Keep the timing in "detail"; "heat" is only the
+   temperature/level.
+10. Respond with ONLY the JSON object. No markdown fences, no preamble.`;
 
 /* ---------- JSON-LD extraction ---------- */
 function findRecipeNode(node: any): any | null {

@@ -747,6 +747,30 @@ tr.hot td.ing {
   font-size: 12px;
   color: var(--kale);
 }
+/* heat badges on step cards */
+.op-heat,
+.s-heat {
+  display: inline-block;
+  margin-top: 4px;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--turmeric);
+  background: var(--turmeric-wash);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.s-heat {
+  margin-left: 8px;
+}
+.stage-heat {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  color: #fff;
+  background: var(--turmeric);
+  padding: 2px 8px;
+  white-space: nowrap;
+}
 .s-ings {
   display: flex;
   flex-wrap: wrap;
