@@ -672,6 +672,32 @@ tr.hot td.ing {
 .stack-block {
   margin-top: 22px;
 }
+/* Original (verbatim) steps view */
+.original {
+  max-width: 760px;
+}
+.orig-steps {
+  margin: 4px 0 0;
+  padding-left: 1.5em;
+  font-size: 15.5px;
+  line-height: 1.6;
+}
+.orig-steps li {
+  margin: 0 0 13px;
+  padding-left: 4px;
+}
+.orig-steps li::marker {
+  font-family: 'Space Mono', monospace;
+  color: var(--turmeric);
+  font-weight: 700;
+}
+.orig-note {
+  margin: 14px 0 0;
+  font-family: 'Space Mono', monospace;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  font-style: italic;
+}
 .stack-h {
   font-family: 'Space Mono', monospace;
   font-size: 11px;
