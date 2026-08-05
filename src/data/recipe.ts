@@ -40,6 +40,9 @@ export type Recipe = {
   steps: Step[];
   notes?: Note[];
   credit?: string;
+  // The source's instructions, verbatim (one per step), when we could capture
+  // them. Powers the "Original steps" view — no restructuring or inference.
+  sourceSteps?: string[];
 };
 
 // A saved recipe row from Supabase (data holds the Recipe above).

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Recipe, Ingredient, Nutrition } from '../data/recipe';
 import { beep, buildGrid, fmtClock, frac, metricRound, type Span } from '../lib/recipeGrid';
-import { effectiveHeats, formatHeat } from '../lib/heat';
+import { formatHeat } from '../lib/heat';
 
 type Props = {
   recipe: Recipe;
@@ -17,6 +17,10 @@ export default function RecipeView({ recipe, nutrition }: Props) {
   const [step, setStep] = useState(-1);
   const [remain, setRemain] = useState<number | null>(null); // null = no timer, -1 = rung
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasOriginal = !!recipe.sourceSteps?.length;
+  // Imported recipes default to the source's exact steps (the grid can misread a
+  // recipe); the toggle switches to the tabular grid.
+  const [view, setView] = useState<'grid' | 'original'>(hasOriginal ? 'original' : 'grid');
 
   const grid = useMemo(() => {
     try {
@@ -31,6 +35,7 @@ export default function RecipeView({ recipe, nutrition }: Props) {
     setStruck(new Set());
     setStep(-1);
     setMult(1);
+    setView(recipe.sourceSteps?.length ? 'original' : 'grid');
   }, [recipe]);
 
   const cooking = step >= 0;
@@ -107,11 +112,10 @@ export default function RecipeView({ recipe, nutrition }: Props) {
     return { entering, carries };
   };
 
-  // Heat per step, carrying the last stated heat forward to later cooking steps.
+  // Heat per step — only what the parser explicitly set (no guessing).
   const heatById = useMemo(() => {
-    const heats = effectiveHeats(recipe.steps);
     const m: Record<string, string | null> = {};
-    recipe.steps.forEach((s, i) => (m[s.id] = heats[i]));
+    recipe.steps.forEach((s) => (m[s.id] = s.heat && s.heat.trim() ? s.heat.trim() : null));
     return m;
   }, [recipe]);
 
@@ -196,8 +200,19 @@ export default function RecipeView({ recipe, nutrition }: Props) {
             Metric
           </button>
         </div>
+        {hasOriginal && (
+          <div className="group">
+            <span>View</span>
+            <button aria-pressed={view === 'original'} onClick={() => setView('original')}>
+              Original
+            </button>
+            <button aria-pressed={view === 'grid'} onClick={() => setView('grid')}>
+              Grid
+            </button>
+          </div>
+        )}
         <div className="group grow">
-          <button className="go" onClick={() => goTo(0)} disabled={!!grid.err}>
+          <button className="go" onClick={() => goTo(0)} disabled={!!grid.err || view === 'original'}>
             Start cooking
           </button>
         </div>
@@ -227,7 +242,39 @@ export default function RecipeView({ recipe, nutrition }: Props) {
         </div>
       )}
 
-      {!grid.err && (
+      {view === 'original' && recipe.sourceSteps && (
+        <div className="original">
+          <section className="stack-block">
+            <h2 className="stack-h">Ingredients</h2>
+            {recipe.ingredients.map((g) => {
+              const q = qtyFor(g);
+              return (
+                <div
+                  key={g.id}
+                  className={'stack-ing' + (struck.has(g.id) ? ' off' : '')}
+                  onClick={() => toggleStruck(g.id)}
+                >
+                  {q && <span className="q">{q}</span>}
+                  {q ? ' ' : ''}
+                  {g.name}
+                  {g.note && <span className="note"> — {g.note}</span>}
+                </div>
+              );
+            })}
+          </section>
+          <section className="stack-block">
+            <h2 className="stack-h">Steps</h2>
+            <ol className="orig-steps">
+              {recipe.sourceSteps.map((s, i) => (
+                <li key={i}>{s}</li>
+              ))}
+            </ol>
+            <p className="orig-note">Steps shown exactly as the source wrote them.</p>
+          </section>
+        </div>
+      )}
+
+      {view === 'grid' && !grid.err && (
         <div className="scroll">
           <table className={cooking ? 'dim' : ''} style={{ minWidth: 560 + nCols * 96 }}>
             <colgroup>
@@ -283,7 +330,7 @@ export default function RecipeView({ recipe, nutrition }: Props) {
         </div>
       )}
 
-      {!grid.err && (
+      {view === 'grid' && !grid.err && (
         <div className={'stack' + (cooking ? ' dim' : '')}>
           <section className="stack-block">
             <h2 className="stack-h">Ingredients</h2>

@@ -220,6 +220,36 @@ function instructionsToText(ins: any): string {
   return ins.text || '';
 }
 
+// Verbatim step list from schema.org recipeInstructions — one entry per step,
+// entities decoded, no restructuring. Powers the "Original steps" view.
+function instructionsToSteps(ins: any): string[] {
+  const clean = (s: string) => decodeEntities(String(s)).replace(/\s+/g, ' ').trim();
+  if (!ins) return [];
+  if (typeof ins === 'string') {
+    return ins
+      .split(/\n+/)
+      .map(clean)
+      .filter(Boolean);
+  }
+  if (Array.isArray(ins)) {
+    const out: string[] = [];
+    for (const i of ins) {
+      if (typeof i === 'string') {
+        const t = clean(i);
+        if (t) out.push(t);
+      } else if (i?.['@type'] === 'HowToSection') {
+        out.push(...instructionsToSteps(i.itemListElement));
+      } else {
+        const t = clean(i?.text || i?.name || '');
+        if (t) out.push(t);
+      }
+    }
+    return out;
+  }
+  const t = clean(ins.text || '');
+  return t ? [t] : [];
+}
+
 function decodeEntities(s: string): string {
   return s
     .replace(/&amp;/g, '&')
@@ -346,6 +376,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let sourceNutrition: ReturnType<typeof parseSourceNutrition> = null;
     let sourcePhoto: string | null = null;
     let sourceUrl: string | null = null;
+    let sourceSteps: string[] = [];
 
     if (image) {
       extractedFrom = 'photo';
@@ -386,6 +417,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         extractedFrom = 'schema.org JSON-LD';
         sourceNutrition = parseSourceNutrition(ld.nutrition);
         sourcePhoto = firstImageUrl(ld.image);
+        sourceSteps = instructionsToSteps(ld.recipeInstructions);
         material = materialFromLd(ld);
       } else if (SOCIAL.test(url)) {
         // Instagram/TikTok/etc. don't share recipe data — the best we can read
@@ -415,6 +447,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         sourceNutrition = parseSourceNutrition(ld.nutrition);
         sourcePhoto = firstImageUrl(ld.image);
         sourceUrl = urlFromLd(ld); // the recipe's own link (e.g. NYT), for the source line
+        sourceSteps = instructionsToSteps(ld.recipeInstructions);
         material = materialFromLd(ld);
       }
     }
@@ -443,6 +476,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? recipe.tags.filter((t: any) => typeof t === 'string' && t.trim()).map((t: string) => t.trim().toLowerCase())
       : [];
     delete recipe.tags;
+
+    // Keep the source's exact steps for the faithful "Original steps" view.
+    if (sourceSteps.length) recipe.sourceSteps = sourceSteps;
 
     return res.status(200).json({
       recipe,
