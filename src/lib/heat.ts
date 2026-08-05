@@ -26,6 +26,21 @@ export function formatHeat(heat: string): string {
   return h;
 }
 
+// Parse a timer (seconds) from a verbatim step's text — the lower bound of the
+// first duration it mentions ("45 to 55 minutes" → 45 min, "1 hour" → 3600).
+// Returns 0 when there's no clear duration.
+export function parseDurationSeconds(text: string): number {
+  if (!text) return 0;
+  const t = text.toLowerCase();
+  let m = t.match(/(\d+(?:\.\d+)?)\s*(?:to|through|–|—|-)?\s*(?:\d+(?:\.\d+)?)?\s*(?:hours?|hrs?)\b/);
+  if (m) return Math.round(parseFloat(m[1]) * 3600);
+  m = t.match(/(\d+(?:\.\d+)?)\s*(?:to|through|–|—|-)?\s*(?:\d+(?:\.\d+)?)?\s*(?:minutes?|mins?)\b/);
+  if (m) return Math.round(parseFloat(m[1]) * 60);
+  m = t.match(/(\d+)\s*(?:to|through|–|—|-)?\s*(?:\d+)?\s*(?:seconds?|secs?)\b/);
+  if (m) return parseInt(m[1], 10);
+  return 0;
+}
+
 // Does a step apply heat, judged from its wording? Used only for carry-forward.
 const COOK_RE =
   /\b(grill|sear|roast|broil|bake|fry|saut|simmer|boil|char|toast|griddle|braise|poach|steam|blister|crisp|cook|heat|preheat)\b/i;

@@ -684,12 +684,22 @@ tr.hot td.ing {
 }
 .orig-steps li {
   margin: 0 0 13px;
-  padding-left: 4px;
+  padding: 2px 8px 2px 4px;
 }
 .orig-steps li::marker {
   font-family: 'Space Mono', monospace;
   color: var(--turmeric);
   font-weight: 700;
+}
+.orig-steps.cooking li {
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.12s;
+}
+.orig-steps.cooking li.hot {
+  opacity: 1;
+  background: var(--turmeric-wash);
+  box-shadow: -6px 0 0 var(--turmeric);
 }
 .orig-note {
   margin: 14px 0 0;

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Recipe, Ingredient, Nutrition } from '../data/recipe';
 import { beep, buildGrid, fmtClock, frac, metricRound, type Span } from '../lib/recipeGrid';
-import { formatHeat } from '../lib/heat';
+import { formatHeat, parseDurationSeconds } from '../lib/heat';
 
 type Props = {
   recipe: Recipe;
@@ -42,6 +42,9 @@ export default function RecipeView({ recipe, nutrition }: Props) {
   const spans = grid.spans || [];
   const nRows = recipe.ingredients.length;
   const nCols = spans.length;
+  // Cook mode walks the grid columns, or the verbatim steps in Original view.
+  const origSteps = recipe.sourceSteps ?? [];
+  const cookLen = view === 'original' ? origSteps.length : nCols;
 
   /* timer */
   useEffect(() => {
@@ -53,7 +56,8 @@ export default function RecipeView({ recipe, nutrition }: Props) {
       setRemain(null);
       return;
     }
-    const sec = spans[step]?.step.seconds || 0;
+    const sec =
+      view === 'original' ? parseDurationSeconds(origSteps[step] ?? '') : spans[step]?.step.seconds || 0;
     if (!sec) {
       setRemain(null);
       return;
@@ -76,8 +80,12 @@ export default function RecipeView({ recipe, nutrition }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, cooking]);
 
-  const goTo = (i: number) => setStep(Math.max(0, Math.min(nCols - 1, i)));
+  const goTo = (i: number) => setStep(Math.max(0, Math.min(cookLen - 1, i)));
   const exitCook = () => setStep(-1);
+  const switchView = (v: 'grid' | 'original') => {
+    setStep(-1); // leave cook mode when switching views (indices differ)
+    setView(v);
+  };
 
   const qtyFor = (g: Ingredient): string | null => {
     const pick = units === 'us' ? g.us || g.metric : g.metric || g.us;
@@ -203,16 +211,20 @@ export default function RecipeView({ recipe, nutrition }: Props) {
         {hasOriginal && (
           <div className="group">
             <span>View</span>
-            <button aria-pressed={view === 'original'} onClick={() => setView('original')}>
+            <button aria-pressed={view === 'original'} onClick={() => switchView('original')}>
               Original
             </button>
-            <button aria-pressed={view === 'grid'} onClick={() => setView('grid')}>
+            <button aria-pressed={view === 'grid'} onClick={() => switchView('grid')}>
               Grid
             </button>
           </div>
         )}
         <div className="group grow">
-          <button className="go" onClick={() => goTo(0)} disabled={!!grid.err || view === 'original'}>
+          <button
+            className="go"
+            onClick={() => goTo(0)}
+            disabled={view === 'grid' ? !!grid.err : origSteps.length === 0}
+          >
             Start cooking
           </button>
         </div>
@@ -224,13 +236,15 @@ export default function RecipeView({ recipe, nutrition }: Props) {
         </div>
       )}
 
-      {cooking && spans[step] && (
+      {cooking && (view === 'original' ? origSteps[step] : spans[step]) && (
         <div className="stage-bar">
           <span className="stage-n">
-            Stage {step + 1} of {nCols}
+            Step {step + 1} of {cookLen}
           </span>
-          <span className="stage-t">{spans[step].step.title || spans[step].step.verb}</span>
-          {heatById[spans[step].step.id] && (
+          <span className="stage-t">
+            {view === 'original' ? origSteps[step] : spans[step].step.title || spans[step].step.verb}
+          </span>
+          {view === 'grid' && spans[step] && heatById[spans[step].step.id] && (
             <span className="stage-heat">🔥 {formatHeat(heatById[spans[step].step.id]!)}</span>
           )}
           <button onClick={() => goTo(step - 1)}>Back</button>
@@ -264,9 +278,11 @@ export default function RecipeView({ recipe, nutrition }: Props) {
           </section>
           <section className="stack-block">
             <h2 className="stack-h">Steps</h2>
-            <ol className="orig-steps">
+            <ol className={'orig-steps' + (cooking ? ' cooking' : '')}>
               {recipe.sourceSteps.map((s, i) => (
-                <li key={i}>{s}</li>
+                <li key={i} className={cooking && step === i ? 'hot' : ''} onClick={() => goTo(i)}>
+                  {s}
+                </li>
               ))}
             </ol>
             <p className="orig-note">Steps shown exactly as the source wrote them.</p>
