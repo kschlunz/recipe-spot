@@ -1,11 +1,11 @@
-// api/plan-suggest.ts — the weekly randomizer. Given a set of empty days, pick a
-// healthy, varied set of recipes to fill them. Claude does the choosing: it
-// leans the week toward vegetables/legumes/fish/lean protein/whole grains and
-// away from heavy fried/dessert-y dishes, and avoids repeating the same main
-// protein or cuisine. Falls back to a plain shuffle if the model is unavailable.
+// api/plan-suggest.ts — fill the week's empty days with recipes that SHARE
+// INGREDIENTS, to cut food waste and shopping. Claude picks recipes whose
+// ingredients overlap with each other and with anything already planned this
+// week — so extra veggies/herbs get used across meals. Still health-leaning and
+// dessert-free. Falls back to a plain shuffle if the model is unavailable.
 //
 //   POST /api/plan-suggest  { days: ['mon','wed', …] }
-//     → { picks: [{ day, slug, title, eyebrow, tagline, serves }], note? }
+//     → { picks: [{ day, slug, title, eyebrow, tagline, serves, calories }], note?, overlap? }
 
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -48,37 +48,62 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-// Ask Claude for an ordered list of slugs; fall back to a shuffle on any trouble.
-async function chooseSlugs(recipes: any[], n: number): Promise<string[]> {
-  const shuffled = shuffle(recipes); // vary input order so repeat taps differ
+// Ultra-common staples don't count as meaningful ingredient overlap.
+const STAPLE_RE =
+  /^(kosher salt|sea salt|salt|black pepper|white pepper|pepper|olive oil|vegetable oil|oil|water|butter|unsalted butter|sugar|granulated sugar|all[- ]purpose flour|flour)$/i;
+const ingNames = (r: any): string[] =>
+  ((r?.data?.ingredients ?? []) as any[]).map((g) => String(g?.name ?? '').trim().toLowerCase()).filter(Boolean);
+
+// Ingredients shared by 2+ of the given recipes (staples excluded), ranked by
+// how many recipes use them — the "reused across meals" summary.
+function sharedIngredients(recipes: any[]): string[] {
+  const count = new Map<string, number>();
+  for (const r of recipes) {
+    for (const name of new Set(ingNames(r))) {
+      if (STAPLE_RE.test(name)) continue;
+      count.set(name, (count.get(name) ?? 0) + 1);
+    }
+  }
+  return [...count.entries()]
+    .filter(([, c]) => c >= 2)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 8)
+    .map(([name]) => name);
+}
+
+// Ask Claude for an ordered list of slugs that overlap on ingredients; fall back
+// to a shuffle on any trouble.
+async function chooseSlugs(recipes: any[], n: number, planned: any[]): Promise<string[]> {
+  const shuffled = shuffle(recipes); // vary input order so ties break differently
   if (!process.env.ANTHROPIC_API_KEY) return shuffled.slice(0, n).map((r) => r.slug);
   try {
     const list = shuffled
       .map((r) => {
         const tags = (r.tags ?? []).join(', ');
-        const ings = ((r.data?.ingredients ?? []) as any[])
-          .map((g) => g.name)
-          .filter(Boolean)
-          .slice(0, 10)
-          .join(', ');
+        const ings = ingNames(r).slice(0, 14).join(', ');
         const cal = Number(r.nutrition?.calories) || 0;
         const calLine = cal ? `\n  calories_per_serving: ${cal}` : '';
         return `slug: ${r.slug}\n  title: ${r.title}\n  tags: ${tags}\n  ingredients: ${ings}${calLine}`;
       })
       .join('\n');
+    const plannedIngs = [...new Set(planned.flatMap(ingNames))].filter((x) => !STAPLE_RE.test(x));
+    const plannedLine = plannedIngs.length
+      ? `Already planned this week — REUSE these ingredients where you can:\n${plannedIngs.join(', ')}\n\n`
+      : '';
     const msg = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 400,
-      temperature: 1,
+      temperature: 0.6,
       system:
-        'You plan a healthy, varied week of weeknight DINNERS. From the recipes given, choose exactly N ' +
-        'that are (1) health-leaning overall — favor vegetables, legumes, fish and lean protein, whole ' +
-        'grains, and salads; go easy on heavy fried dishes — and (2) varied: avoid repeating the same ' +
-        'main protein or cuisine across your picks. When calories_per_serving is given, balance the ' +
-        "week's calorie load — mix lighter and heartier dinners rather than stacking all high-calorie " +
-        'dishes. These must be main meals — never choose a dessert, sweet, or baked treat. Respond with ' +
-        'ONLY a JSON array of exactly N recipe slugs, most-recommended first, using only slugs from the list.',
-      messages: [{ role: 'user', content: `N = ${n}\n\nRecipes:\n${list}` }],
+        'You plan weeknight DINNERS that SHARE INGREDIENTS, to cut food waste and shopping. From the ' +
+        'recipes given, choose exactly N to fill the empty days so that your picks — together with any ' +
+        'recipes already planned this week — reuse the same ingredients across multiple meals. Prioritize ' +
+        'overlap on FRESH PRODUCE (vegetables, herbs, greens) and other perishables that would otherwise ' +
+        'be bought and go to waste; a shared pantry staple (salt, oil, flour) does not count. Prefer sets ' +
+        'where several recipes share multiple ingredients. Keep the picks health-leaning, and never choose ' +
+        'a dessert, sweet, or baked treat. Respond with ONLY a JSON array of exactly N recipe slugs, ' +
+        'best-overlap first, using only slugs from the list.',
+      messages: [{ role: 'user', content: `${plannedLine}N = ${n}\n\nRecipes to choose from:\n${list}` }],
     });
     const text = msg.content
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')
@@ -131,15 +156,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ picks: [], note: 'No saved recipes yet — import a few first.' });
   }
 
+  const bySlug = new Map(recipes.map((r: any) => [r.slug, r]));
+
+  // What's already on the week — so the fills overlap with it too.
+  const { data: plannedRows } = await supabase.from('meal_plan_recipes').select('recipe_slug');
+  const plannedSlugs = new Set((plannedRows ?? []).map((r: any) => r.recipe_slug));
+  const planned = [...plannedSlugs].map((s) => bySlug.get(s)).filter(Boolean);
+
   // Only main meals are eligible for a dinner day — desserts are filtered out
-  // up front. If somehow everything is a dessert, fall back to the full list so
-  // the button still does something.
-  const mains = recipes.filter((r: any) => !isDessert(r));
-  const pool = mains.length > 0 ? mains : recipes;
+  // up front, along with anything already on the plan. If somehow everything is
+  // filtered out, fall back so the button still does something.
+  const mains = recipes.filter((r: any) => !isDessert(r) && !plannedSlugs.has(r.slug));
+  const pool = mains.length > 0 ? mains : recipes.filter((r: any) => !isDessert(r));
 
   const n = Math.min(days.length, pool.length);
-  const slugs = await chooseSlugs(pool, n);
-  const bySlug = new Map(recipes.map((r: any) => [r.slug, r]));
+  const slugs = await chooseSlugs(pool, n, planned);
 
   const picks = slugs.map((slug, i) => {
     const r = bySlug.get(slug);
@@ -154,6 +185,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
   });
 
+  // The ingredients that now get reused across the week (picks + already planned).
+  const overlap = sharedIngredients([...picks.map((p) => bySlug.get(p.slug)), ...planned]);
+
   const short = days.length - picks.length;
   const note =
     short > 0
@@ -161,5 +195,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : undefined;
 
   res.setHeader('Cache-Control', 'no-store');
-  return res.status(200).json({ picks, note });
+  return res.status(200).json({ picks, note, overlap });
 }
