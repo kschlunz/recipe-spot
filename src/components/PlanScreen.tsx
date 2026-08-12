@@ -182,7 +182,11 @@ export default function PlanScreen() {
       }
       // Re-sync from the server so calories/servings are authoritative.
       refresh(true);
-      if (json.note) setFillMsg(json.note);
+      const overlap: string[] = Array.isArray(json.overlap) ? json.overlap : [];
+      const msgs = [];
+      if (overlap.length) msgs.push(`♻️ Reused across meals: ${overlap.slice(0, 6).join(', ')}.`);
+      if (json.note) msgs.push(json.note);
+      setFillMsg(msgs.join(' '));
     } catch (e) {
       setFillMsg((e as Error).message);
     } finally {
@@ -224,10 +228,10 @@ export default function PlanScreen() {
             title={
               openDays.length === 0
                 ? 'Every day already has something'
-                : 'Fill the empty days with a healthy, varied pick'
+                : 'Fill the empty days with recipes that share ingredients, to use up produce and cut shopping'
             }
           >
-            {filling ? 'Filling…' : '🎲 Fill my week'}
+            {filling ? 'Filling…' : '🧺 Fill my week'}
           </button>
           <a href="#/shopping" className="go" style={{ padding: '6px 13px', textDecoration: 'none' }}>
             🛒 Shopping list
