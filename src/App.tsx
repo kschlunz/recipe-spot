@@ -4,12 +4,14 @@ import ImportScreen from './components/ImportScreen';
 import RecipePage from './components/RecipePage';
 import PlanScreen from './components/PlanScreen';
 import ShoppingScreen from './components/ShoppingScreen';
+import FridgeScreen from './components/FridgeScreen';
 
 type Route =
   | { name: 'index' }
   | { name: 'new' }
   | { name: 'plan' }
   | { name: 'shopping' }
+  | { name: 'fridge' }
   | { name: 'recipe'; slug: string };
 
 function parseRoute(): Route {
@@ -17,6 +19,7 @@ function parseRoute(): Route {
   if (hash === '/new') return { name: 'new' };
   if (hash === '/plan') return { name: 'plan' };
   if (hash === '/shopping') return { name: 'shopping' };
+  if (hash === '/fridge') return { name: 'fridge' };
   const m = hash.match(/^\/r\/([^/]+)/);
   if (m) return { name: 'recipe', slug: decodeURIComponent(m[1]) };
   return { name: 'index' };
@@ -32,6 +35,9 @@ function TopBar({ active }: { active: Route['name'] }) {
         <span className="topbar-spacer" />
         <a href="#/" className={'navlink' + (active === 'index' ? ' on' : '')}>
           Recipes
+        </a>
+        <a href="#/fridge" className={'navlink' + (active === 'fridge' ? ' on' : '')}>
+          In the Fridge
         </a>
         <a href="#/plan" className={'navlink' + (active === 'plan' ? ' on' : '')}>
           This Week
@@ -66,6 +72,7 @@ export default function App() {
       {route.name === 'new' && <ImportScreen />}
       {route.name === 'plan' && <PlanScreen />}
       {route.name === 'shopping' && <ShoppingScreen />}
+      {route.name === 'fridge' && <FridgeScreen />}
       {route.name === 'recipe' && <RecipePage slug={route.slug} />}
     </>
   );
