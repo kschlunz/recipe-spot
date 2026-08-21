@@ -335,9 +335,13 @@ export default function RecipePage({ slug }: { slug: string }) {
                   </button>
                 )}
                 <button onClick={() => window.print()}>Print</button>
-                {editable && cost == null && (
-                  <button onClick={calcCost} disabled={costBusy}>
-                    {costBusy ? 'Pricing…' : 'Estimate cost'}
+                {editable && (
+                  <button
+                    onClick={calcCost}
+                    disabled={costBusy}
+                    title={cost == null ? undefined : 'Refresh the grocery-cost estimate'}
+                  >
+                    {costBusy ? 'Pricing…' : cost == null ? 'Estimate cost' : '↻ Re-estimate cost'}
                   </button>
                 )}
                 {editable && !nutrition && (
