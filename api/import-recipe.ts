@@ -220,34 +220,55 @@ function instructionsToText(ins: any): string {
   return ins.text || '';
 }
 
+// Split a step string that jams several numbered steps into one blob
+// ("1. Do this 2. Then that") into separate steps. No lookbehind (older Safari).
+function splitInlineSteps(s: string): string[] {
+  const stripLead = (x: string) => x.replace(/^\s*\d{1,2}[.)]\s+/, '').trim();
+  const re = /\d{1,2}[.)]\s+/g;
+  const cuts: Array<[number, number]> = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s)) !== null) {
+    const prev = m.index > 0 ? s[m.index - 1] : '';
+    if (/\d/.test(prev)) continue; // part of a larger number, not a step marker
+    cuts.push([m.index, m.index + m[0].length]);
+  }
+  if (cuts.length < 2) return [stripLead(s)].filter(Boolean);
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const [start, end] of cuts) {
+    parts.push(s.slice(cursor, start));
+    cursor = end;
+  }
+  parts.push(s.slice(cursor));
+  return parts.map(stripLead).filter(Boolean);
+}
+
 // Verbatim step list from schema.org recipeInstructions — one entry per step,
 // entities decoded, no restructuring. Powers the "Original steps" view.
 function instructionsToSteps(ins: any): string[] {
   const clean = (s: string) => decodeEntities(String(s)).replace(/\s+/g, ' ').trim();
+  const push = (out: string[], s: string) => {
+    const c = clean(s);
+    if (c) out.push(...splitInlineSteps(c));
+  };
   if (!ins) return [];
   if (typeof ins === 'string') {
-    return ins
-      .split(/\n+/)
-      .map(clean)
-      .filter(Boolean);
+    const out: string[] = [];
+    ins.split(/\n+/).forEach((line) => push(out, line));
+    return out;
   }
   if (Array.isArray(ins)) {
     const out: string[] = [];
     for (const i of ins) {
-      if (typeof i === 'string') {
-        const t = clean(i);
-        if (t) out.push(t);
-      } else if (i?.['@type'] === 'HowToSection') {
-        out.push(...instructionsToSteps(i.itemListElement));
-      } else {
-        const t = clean(i?.text || i?.name || '');
-        if (t) out.push(t);
-      }
+      if (typeof i === 'string') push(out, i);
+      else if (i?.['@type'] === 'HowToSection') out.push(...instructionsToSteps(i.itemListElement));
+      else push(out, i?.text || i?.name || '');
     }
     return out;
   }
-  const t = clean(ins.text || '');
-  return t ? [t] : [];
+  const out: string[] = [];
+  push(out, ins.text || '');
+  return out;
 }
 
 function decodeEntities(s: string): string {
