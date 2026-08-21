@@ -32,6 +32,31 @@ function slugify(title: string): string {
   );
 }
 
+// How many times each recipe has been cooked, and when last, from the cook log.
+// Returns an empty map if the cook_log table isn't there yet (never throws).
+async function cookCounts(
+  supabase: SupabaseClient,
+  slug?: string,
+): Promise<Map<string, { count: number; last: string | null }>> {
+  const out = new Map<string, { count: number; last: string | null }>();
+  let q = supabase.from('cook_log').select('recipe_slug, cooked_on');
+  if (slug) q = q.eq('recipe_slug', slug);
+  const { data, error } = await q;
+  if (error || !data) return out;
+  for (const row of data as any[]) {
+    const s = row.recipe_slug;
+    const on = row.cooked_on ?? null;
+    const cur = out.get(s);
+    if (cur) {
+      cur.count += 1;
+      if (on && (!cur.last || on > cur.last)) cur.last = on;
+    } else {
+      out.set(s, { count: 1, last: on });
+    }
+  }
+  return out;
+}
+
 async function uniqueSlug(supabase: SupabaseClient, base: string): Promise<string> {
   let slug = base;
   for (let n = 2; n < 1000; n++) {
@@ -64,8 +89,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (error) return res.status(500).json({ error: error.message });
       if (!data) return res.status(404).json({ error: 'Recipe not found' });
-      res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
-      return res.status(200).json({ recipe: data });
+      const cooked = (await cookCounts(supabase, slug)).get(slug);
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).json({
+        recipe: { ...data, cookedCount: cooked?.count ?? 0, lastCookedOn: cooked?.last ?? null },
+      });
     }
 
     const LIST = 'slug, title, data, tags, photo_url';
@@ -82,6 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (error) return res.status(500).json({ error: error.message });
 
+    const cooked = await cookCounts(supabase);
     const recipes = (data ?? []).map((row: any) => ({
       slug: row.slug,
       title: row.title,
@@ -94,8 +123,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       calories: Number(row.nutrition?.calories) || null,
       hasCost: row.cost != null,
       cost: Number(row.cost) || null,
+      cookedCount: cooked.get(row.slug)?.count ?? 0,
+      lastCookedOn: cooked.get(row.slug)?.last ?? null,
     }));
-    res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
+    res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({ total: recipes.length, recipes });
   }
 

@@ -21,6 +21,14 @@ function prettyUrl(url: string): string {
   }
 }
 
+// Format a YYYY-MM-DD (local) as "Aug 21" for the "Made N×" line.
+function fmtMade(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${months[m - 1]} ${d}`;
+}
+
 function AddToWeek({ slug }: { slug: string }) {
   const [added, setAdded] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -154,6 +162,8 @@ export default function RecipePage({ slug }: { slug: string }) {
     setNutrition,
     cost,
     setCost,
+    cookedCount,
+    lastCookedOn,
     loading,
     error,
     refresh,
@@ -386,6 +396,11 @@ export default function RecipePage({ slug }: { slug: string }) {
                 )}
             </div>
           </div>
+          {cookedCount > 0 && (
+            <p className="rp-made" title="From your cooking log">
+              🍳 Made {cookedCount}×{lastCookedOn ? ` · last on ${fmtMade(lastCookedOn)}` : ''}
+            </p>
+          )}
           {actionErr && <p className="status-line err">{actionErr}</p>}
           {infoMsg && <p className="status-line">{infoMsg}</p>}
           {editable && !photoUrl && (

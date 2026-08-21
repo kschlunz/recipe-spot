@@ -22,7 +22,14 @@ function RecipeCard({ r, onFav }: { r: RecipeSummary; onFav: (slug: string) => v
           ))}
         </div>
       )}
-      {r.calories ? <p className="rcard-cal">≈ {r.calories.toLocaleString()} cal / serving</p> : null}
+      <div className="rcard-meta">
+        {r.calories ? <span className="rcard-cal">≈ {r.calories.toLocaleString()} cal / serving</span> : null}
+        {r.cookedCount ? (
+          <span className="rcard-made" title="Times you've cooked this">
+            🍳 Made {r.cookedCount}×
+          </span>
+        ) : null}
+      </div>
     </a>
   );
 }
