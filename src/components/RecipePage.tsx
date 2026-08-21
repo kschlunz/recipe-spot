@@ -152,6 +152,8 @@ export default function RecipePage({ slug }: { slug: string }) {
     favorite,
     nutrition,
     setNutrition,
+    cost,
+    setCost,
     loading,
     error,
     refresh,
@@ -160,8 +162,32 @@ export default function RecipePage({ slug }: { slug: string }) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [nutriBusy, setNutriBusy] = useState(false);
+  const [costBusy, setCostBusy] = useState(false);
   const [actionErr, setActionErr] = useState('');
   const [infoMsg, setInfoMsg] = useState('');
+
+  const calcCost = async () => {
+    setCostBusy(true);
+    setActionErr('');
+    setInfoMsg('');
+    try {
+      const res = await fetch('/api/cost', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ slug }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !(j.cost > 0)) throw new Error(j.error || `HTTP ${res.status}`);
+      setCost(j.cost);
+      if (j.saved === false) {
+        setInfoMsg('Estimated — run the database update (cost column) to save it for good.');
+      }
+    } catch (e) {
+      setActionErr((e as Error).message);
+    } finally {
+      setCostBusy(false);
+    }
+  };
   const photoRef = useRef<HTMLInputElement>(null);
   const wake = useWakeLock();
 
@@ -309,6 +335,11 @@ export default function RecipePage({ slug }: { slug: string }) {
                   </button>
                 )}
                 <button onClick={() => window.print()}>Print</button>
+                {editable && cost == null && (
+                  <button onClick={calcCost} disabled={costBusy}>
+                    {costBusy ? 'Pricing…' : 'Estimate cost'}
+                  </button>
+                )}
                 {editable && !nutrition && (
                   <button onClick={calcNutrition} disabled={nutriBusy}>
                     {nutriBusy ? 'Estimating…' : 'Calculate nutrition'}
@@ -387,7 +418,7 @@ export default function RecipePage({ slug }: { slug: string }) {
             />
           )}
 
-          <RecipeView recipe={shown} nutrition={nutrition} />
+          <RecipeView recipe={shown} nutrition={nutrition} cost={cost} />
           {sourceUrl && (
             <p className="recipe-source">
               Source:{' '}

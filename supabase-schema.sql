@@ -26,6 +26,9 @@ alter table public.recipes add column if not exists favorite boolean not null de
 -- Estimated per-serving nutrition: { calories, protein, carbs, fat }.
 alter table public.recipes add column if not exists nutrition jsonb;
 
+-- Estimated total grocery cost to make the recipe, in USD.
+alter table public.recipes add column if not exists cost numeric;
+
 -- Public storage bucket for dish photos. Uploads happen through the serverless
 -- functions with the service-role key; reads are public.
 insert into storage.buckets (id, name, public)

@@ -60,6 +60,7 @@ export function useRecipe(slug: string) {
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [favorite, setFavorite] = useState(false);
   const [nutrition, setNutrition] = useState<Nutrition | null>(null);
+  const [cost, setCost] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +79,7 @@ export function useRecipe(slug: string) {
           setSourceUrl(json.recipe?.source_url ?? null);
           setFavorite(!!json.recipe?.favorite);
           setNutrition(json.recipe?.nutrition ?? null);
+          setCost(json.recipe?.cost != null ? Number(json.recipe.cost) : null);
         }
       } catch (e) {
         if (alive()) setError((e as Error).message);
@@ -95,6 +97,7 @@ export function useRecipe(slug: string) {
     setPhotoUrl(null);
     setSourceUrl(null);
     setNutrition(null);
+    setCost(null);
     load(() => on);
     return () => {
       on = false;
@@ -121,6 +124,8 @@ export function useRecipe(slug: string) {
     favorite,
     nutrition,
     setNutrition,
+    cost,
+    setCost,
     loading,
     error,
     refresh,

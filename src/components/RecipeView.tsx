@@ -7,11 +7,12 @@ import { splitSteps } from '../lib/steps';
 type Props = {
   recipe: Recipe;
   nutrition?: Nutrition | null;
+  cost?: number | null;
 };
 
 // The tabular renderer: a read + cook view for a single recipe. Every rowspan
 // is computed by buildGrid from the recipe tree.
-export default function RecipeView({ recipe, nutrition }: Props) {
+export default function RecipeView({ recipe, nutrition, cost }: Props) {
   const [mult, setMult] = useState(1);
   const [units, setUnits] = useState<'us' | 'si'>('us');
   const [struck, setStruck] = useState<Set<string>>(() => new Set());
@@ -189,6 +190,21 @@ export default function RecipeView({ recipe, nutrition }: Props) {
             <b>{nutrition.fat}g</b> fat
           </span>
           <span className="est">{nutrition.source === 'source' ? 'from source' : 'estimated'}</span>
+        </div>
+      )}
+
+      {cost != null && cost > 0 && (
+        <div className="cost">
+          <span className="nl">Groceries</span>
+          <span>
+            <b>${cost.toFixed(2).replace(/\.00$/, '')}</b> total
+          </span>
+          {recipe.serves ? (
+            <span>
+              ~${(cost / recipe.serves).toFixed(2)}/serving
+            </span>
+          ) : null}
+          <span className="est">estimated</span>
         </div>
       )}
 

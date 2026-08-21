@@ -1820,6 +1820,40 @@ tr.hot td.ing {
   opacity: 0.7;
 }
 
+.nutrition + .cost {
+  margin-top: -13px;
+}
+.cost {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+  margin: 0 0 22px;
+  padding: 11px 14px;
+  background: var(--turmeric-wash);
+  border-left: 3px solid var(--turmeric);
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.cost b {
+  color: var(--ink);
+  font-size: 14px;
+}
+.cost .nl {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 11px;
+  color: var(--turmeric);
+  font-weight: 700;
+}
+.cost .est {
+  margin-left: auto;
+  font-style: italic;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
 /* ---------- recipe source link ---------- */
 .recipe-source {
   margin: 22px 0 0;
