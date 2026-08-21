@@ -178,6 +178,12 @@ export default function ImportScreen() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      // Estimate grocery cost in the background (fire-and-forget).
+      fetch('/api/cost', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ slug: json.slug }),
+      }).catch(() => {});
       // When the source didn't provide nutrition, estimate it now and WAIT, so
       // the recipe opens with nutrition already filled in rather than showing a
       // "Calculate nutrition" button.

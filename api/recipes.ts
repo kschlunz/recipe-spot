@@ -52,11 +52,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (slug) {
       const BASE = 'slug, title, data, source_url, tags, photo_url, created_at, updated_at';
-      // Include favorite + nutrition; if either column isn't there yet, fall back
-      // to the base set so recipe loading never breaks.
+      // Include favorite + nutrition + cost; if any column isn't there yet, fall
+      // back to the base set so recipe loading never breaks.
       let { data, error } = await supabase
         .from('recipes')
-        .select(`${BASE}, favorite, nutrition`)
+        .select(`${BASE}, favorite, nutrition, cost`)
         .eq('slug', slug)
         .maybeSingle();
       if (error) {
