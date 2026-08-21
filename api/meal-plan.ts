@@ -42,6 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       servings: number | null;
       calories?: number | null;
       cost?: number | null;
+      cookedOn?: string | null;
     };
     type Entry = { recipes: Recipe[]; note: string };
     const plan: Record<string, Entry> = {};
@@ -62,6 +63,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .order('position', { ascending: true })
       .order('created_at', { ascending: true });
     if (error) return res.status(500).json({ error: error.message });
+
+    // Which planned dishes are checked off as cooked (by meal_plan_recipes id).
+    // Resilient: if the cook_log table isn't there yet, just treat none as cooked.
+    const itemIds = [...new Set((rows ?? []).map((r: any) => r.id))];
+    const cookedByItem = new Map<string, string>();
+    if (itemIds.length > 0) {
+      const { data: logRows } = await supabase
+        .from('cook_log')
+        .select('item_id, cooked_on')
+        .in('item_id', itemIds);
+      for (const lr of logRows ?? []) {
+        const iid = (lr as any).item_id;
+        if (iid) cookedByItem.set(iid, (lr as any).cooked_on);
+      }
+    }
 
     const slugs = [...new Set((rows ?? []).map((r: any) => r.recipe_slug))];
     const bySlug = new Map<string, any>();
@@ -100,6 +116,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         servings: (row as any).servings ?? null,
         calories: Number(r.nutrition?.calories) || null,
         cost: Number(r.cost) || null,
+        cookedOn: cookedByItem.get((row as any).id) ?? null,
       });
     }
 

@@ -29,6 +29,15 @@ export type PlanRecipe = PlanEntry & {
   servings: number | null;
   calories?: number | null;
   cost?: number | null;
+  cookedOn?: string | null; // YYYY-MM-DD when checked off as cooked, else null
+};
+
+// Today's date as YYYY-MM-DD in the viewer's own timezone (not UTC), so
+// "cooked today" lands on the right calendar day.
+const localToday = (): string => {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 };
 export type DayPlan = { recipes: PlanRecipe[]; note: string };
 export type Plan = Record<Day, DayPlan>;
@@ -133,6 +142,29 @@ export function useMealPlan() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Check/uncheck a planned dish as cooked. Optimistic: stamps today's local
+  // date (or clears it), then writes to the persistent cook log.
+  const toggleCooked = useCallback(async (day: Day, item: PlanRecipe) => {
+    const nextOn = item.cookedOn ? null : localToday();
+    setPlan((p) => ({
+      ...p,
+      [day]: {
+        ...p[day],
+        recipes: p[day].recipes.map((r) => (r.id === item.id ? { ...r, cookedOn: nextOn } : r)),
+      },
+    }));
+    if (item.id.startsWith('temp-')) return; // still being created; try again once saved
+    if (nextOn) {
+      await fetch('/api/cook-log', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ slug: item.slug, title: item.title, item_id: item.id, day, cooked_on: nextOn }),
+      });
+    } else {
+      await fetch(`/api/cook-log?item=${encodeURIComponent(item.id)}`, { method: 'DELETE' });
+    }
+  }, []);
+
   const setNote = useCallback(async (day: Day, note: string) => {
     setPlan((p) => ({ ...p, [day]: { ...p[day], note } }));
     await post({ day, note });
@@ -149,5 +181,5 @@ export function useMealPlan() {
     await fetch('/api/meal-plan?all=1', { method: 'DELETE' });
   }, []);
 
-  return { plan, loading, error, refresh, addRecipe, removeRecipe, moveRecipe, setNote, setServings, clearDay, clear };
+  return { plan, loading, error, refresh, addRecipe, removeRecipe, moveRecipe, toggleCooked, setNote, setServings, clearDay, clear };
 }

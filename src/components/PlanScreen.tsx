@@ -101,23 +101,34 @@ function DayNote({ value, onSave }: { value: string; onSave: (v: string) => void
   );
 }
 
-// One planned dish within a day: drag handle, link, servings stepper, remove.
+// Format a YYYY-MM-DD as "Aug 21" for the cooked badge.
+function fmtShort(isoDate: string): string {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  if (!y || !m || !d) return isoDate;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${months[m - 1]} ${d}`;
+}
+
+// One planned dish within a day: cooked check, drag handle, link, servings, remove.
 function DayRecipe({
   recipe,
   dragging,
   onDragStart,
+  onToggleCooked,
   onServings,
   onRemove,
 }: {
   recipe: PlanRecipe;
   dragging: boolean;
   onDragStart: (e: React.PointerEvent) => void;
+  onToggleCooked: () => void;
   onServings: (servings: number) => void;
   onRemove: () => void;
 }) {
   const serves = recipe.servings ?? recipe.serves ?? 4;
+  const cooked = !!recipe.cookedOn;
   return (
-    <div className={'day-recipe' + (dragging ? ' dragging' : '')}>
+    <div className={'day-recipe' + (dragging ? ' dragging' : '') + (cooked ? ' cooked' : '')}>
       <span
         className="drag-grip"
         onPointerDown={onDragStart}
@@ -132,6 +143,14 @@ function DayRecipe({
         <b>{recipe.title}</b>
       </a>
       {recipe.calories ? <div className="day-recipe-cal">≈ {recipe.calories.toLocaleString()} cal</div> : null}
+      <button
+        className={'cooked-check' + (cooked ? ' on' : '')}
+        onClick={onToggleCooked}
+        title={cooked ? 'Cooked — tap to un-check' : 'Mark this as cooked'}
+      >
+        <span className="box">{cooked ? '✓' : ''}</span>
+        {cooked ? `Cooked · ${fmtShort(recipe.cookedOn!)}` : 'Cooked?'}
+      </button>
       <div className="day-recipe-controls">
         <div className="day-serves">
           <span>Serves</span>
@@ -152,7 +171,7 @@ function DayRecipe({
 }
 
 export default function PlanScreen() {
-  const { plan, loading, error, refresh, addRecipe, removeRecipe, moveRecipe, setNote, setServings, clear } =
+  const { plan, loading, error, refresh, addRecipe, removeRecipe, moveRecipe, toggleCooked, setNote, setServings, clear } =
     useMealPlan();
   const [picking, setPicking] = useState<Day | null>(null);
   const [filling, setFilling] = useState(false);
@@ -316,6 +335,9 @@ export default function PlanScreen() {
           <a href="#/shopping" className="go" style={{ padding: '6px 13px', textDecoration: 'none' }}>
             🛒 Shopping list
           </a>
+          <a href="#/cooked" className="go" style={{ padding: '6px 13px', textDecoration: 'none' }}>
+            🍳 Cooked log
+          </a>
           <button
             onClick={() => {
               if (filled > 0 && window.confirm('Clear all recipes and notes from this week?')) clear();
@@ -349,6 +371,7 @@ export default function PlanScreen() {
                   recipe={r}
                   dragging={dragId === r.id}
                   onDragStart={(e) => startDrag(e, r, d.key)}
+                  onToggleCooked={() => toggleCooked(d.key, r)}
                   onServings={(s) => setServings(d.key, r.id, s)}
                   onRemove={() => removeRecipe(d.key, r.id)}
                 />
