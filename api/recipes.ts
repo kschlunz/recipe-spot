@@ -69,13 +69,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const LIST = 'slug, title, data, tags, photo_url';
-    // Include favorite + nutrition; fall back to the base set if either column
-    // isn't there yet.
+    // Include favorite + nutrition + cost; fall back to the base set if any of
+    // those columns isn't there yet.
     let data: any[] | null = null;
     let error: any = null;
     ({ data, error } = await supabase
       .from('recipes')
-      .select(`${LIST}, favorite, nutrition`)
+      .select(`${LIST}, favorite, nutrition, cost`)
       .order('created_at', { ascending: false }));
     if (error) {
       ({ data, error } = await supabase.from('recipes').select(LIST).order('created_at', { ascending: false }));
@@ -92,6 +92,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       favorite: !!row.favorite,
       hasNutrition: !!row.nutrition,
       calories: Number(row.nutrition?.calories) || null,
+      hasCost: row.cost != null,
+      cost: Number(row.cost) || null,
     }));
     res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
     return res.status(200).json({ total: recipes.length, recipes });

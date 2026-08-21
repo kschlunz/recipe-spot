@@ -36,32 +36,54 @@ export default function IndexScreen() {
   const [backfill, setBackfill] = useState({ running: false, done: 0, total: 0, msg: '' });
 
   const favCount = useMemo(() => recipes.filter((r) => r.favorite).length, [recipes]);
-  const missingNutrition = useMemo(() => recipes.filter((r) => !r.hasNutrition), [recipes]);
+  // Recipes missing a nutrition estimate, a cost estimate, or both — one tap
+  // prices and nutrition-labels the whole library.
+  const missing = useMemo(
+    () => recipes.filter((r) => !r.hasNutrition || !r.hasCost),
+    [recipes],
+  );
 
-  // Estimate nutrition for every recipe that doesn't have it yet, one after
-  // another with a live count. Stops early if the estimates can't be saved
-  // (nutrition column not added), and refreshes so the bar hides when done.
-  const backfillNutrition = async () => {
-    const slugs = missingNutrition.map((r) => r.slug);
-    if (slugs.length === 0 || backfill.running) return;
-    setBackfill({ running: true, done: 0, total: slugs.length, msg: '' });
+  // Fill in nutrition and/or cost for every recipe that's missing either, one
+  // recipe after another with a live count. Stops early if an estimate can't be
+  // saved (the column isn't there yet), and refreshes so the bar hides when done.
+  const backfillEstimates = async () => {
+    const todo = missing.map((r) => ({
+      slug: r.slug,
+      needNutrition: !r.hasNutrition,
+      needCost: !r.hasCost,
+    }));
+    if (todo.length === 0 || backfill.running) return;
+    setBackfill({ running: true, done: 0, total: todo.length, msg: '' });
     let done = 0;
     let unsaved = false;
-    for (const slug of slugs) {
-      try {
-        const res = await fetch('/api/nutrition', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ slug }),
-        });
-        const j = await res.json().catch(() => ({}));
-        if (res.ok && j.saved === false) {
-          unsaved = true;
-          break;
+    for (const t of todo) {
+      if (t.needNutrition) {
+        try {
+          const res = await fetch('/api/nutrition', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ slug: t.slug }),
+          });
+          const j = await res.json().catch(() => ({}));
+          if (res.ok && j.saved === false) unsaved = true;
+        } catch {
+          /* skip this one, keep going */
         }
-      } catch {
-        /* skip this one, keep going */
       }
+      if (t.needCost) {
+        try {
+          const res = await fetch('/api/cost', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ slug: t.slug }),
+          });
+          const j = await res.json().catch(() => ({}));
+          if (res.ok && j.saved === false) unsaved = true;
+        } catch {
+          /* skip this one, keep going */
+        }
+      }
+      if (unsaved) break;
       done += 1;
       setBackfill((b) => ({ ...b, done }));
     }
@@ -70,7 +92,7 @@ export default function IndexScreen() {
       ...b,
       running: false,
       msg: unsaved
-        ? 'Estimates could not be saved — run the database update (nutrition column) first.'
+        ? 'Estimates could not be saved — run the database update (nutrition + cost columns) first.'
         : '',
     }));
   };
@@ -183,21 +205,21 @@ export default function IndexScreen() {
         )}
 
         <div className="index-main">
-          {(missingNutrition.length > 0 || backfill.msg) && (
+          {(missing.length > 0 || backfill.msg) && (
             <div className="nutri-backfill">
               {backfill.running ? (
                 <span>
-                  Estimating nutrition… {backfill.done}/{backfill.total}
+                  Estimating nutrition &amp; cost… {backfill.done}/{backfill.total}
                 </span>
               ) : backfill.msg ? (
                 <span className="nb-msg">{backfill.msg}</span>
               ) : (
                 <>
                   <span>
-                    {missingNutrition.length} recipe{missingNutrition.length === 1 ? '' : 's'} without
-                    nutrition.
+                    {missing.length} recipe{missing.length === 1 ? '' : 's'} missing nutrition or cost
+                    estimates.
                   </span>{' '}
-                  <button className="linkish" onClick={backfillNutrition}>
+                  <button className="linkish" onClick={backfillEstimates}>
                     Estimate all
                   </button>
                 </>
