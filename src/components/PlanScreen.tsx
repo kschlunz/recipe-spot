@@ -1,6 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DAYS, useMealPlan, type Day, type PlanEntry, type PlanRecipe } from '../hooks/useMealPlan';
 import { useRecipeList } from '../hooks/useRecipes';
+
+const DAY_KEYS = DAYS.map((d) => d.key) as readonly string[];
+
+// Which day-card sits under a screen point, for touch/mouse drag-and-drop.
+function dayUnderPoint(x: number, y: number): Day | null {
+  const el = document.elementFromPoint(x, y) as HTMLElement | null;
+  const card = el?.closest('[data-day]') as HTMLElement | null;
+  const d = card?.dataset.day;
+  return d && DAY_KEYS.includes(d) ? (d as Day) : null;
+}
 
 function RecipePicker({
   dayLabel,
@@ -91,19 +101,32 @@ function DayNote({ value, onSave }: { value: string; onSave: (v: string) => void
   );
 }
 
-// One planned dish within a day: link, servings stepper, remove.
+// One planned dish within a day: drag handle, link, servings stepper, remove.
 function DayRecipe({
   recipe,
+  dragging,
+  onDragStart,
   onServings,
   onRemove,
 }: {
   recipe: PlanRecipe;
+  dragging: boolean;
+  onDragStart: (e: React.PointerEvent) => void;
   onServings: (servings: number) => void;
   onRemove: () => void;
 }) {
   const serves = recipe.servings ?? recipe.serves ?? 4;
   return (
-    <div className="day-recipe">
+    <div className={'day-recipe' + (dragging ? ' dragging' : '')}>
+      <span
+        className="drag-grip"
+        onPointerDown={onDragStart}
+        title="Drag to another day"
+        aria-label="Drag to another day"
+        role="button"
+      >
+        ⠿
+      </span>
       <a className="day-recipe-link" href={`#/r/${recipe.slug}`}>
         {recipe.eyebrow && <span className="eyebrow">{recipe.eyebrow}</span>}
         <b>{recipe.title}</b>
@@ -129,11 +152,54 @@ function DayRecipe({
 }
 
 export default function PlanScreen() {
-  const { plan, loading, error, refresh, addRecipe, removeRecipe, setNote, setServings, clear } =
+  const { plan, loading, error, refresh, addRecipe, removeRecipe, moveRecipe, setNote, setServings, clear } =
     useMealPlan();
   const [picking, setPicking] = useState<Day | null>(null);
   const [filling, setFilling] = useState(false);
   const [fillMsg, setFillMsg] = useState('');
+
+  // Drag-and-drop to move a dish to another day. Pointer-based so it works with
+  // both a mouse and a finger (native HTML5 DnD doesn't fire on touch).
+  const dragRef = useRef<{ itemId: string; fromDay: Day } | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overDay, setOverDay] = useState<Day | null>(null);
+  const [ghost, setGhost] = useState<{ title: string; x: number; y: number } | null>(null);
+
+  const onDragMove = useCallback((e: PointerEvent) => {
+    setGhost((g) => (g ? { ...g, x: e.clientX, y: e.clientY } : g));
+    setOverDay(dayUnderPoint(e.clientX, e.clientY));
+  }, []);
+
+  const onDragEnd = useCallback(
+    (e: PointerEvent) => {
+      window.removeEventListener('pointermove', onDragMove);
+      window.removeEventListener('pointerup', onDragEnd);
+      window.removeEventListener('pointercancel', onDragEnd);
+      const target = dayUnderPoint(e.clientX, e.clientY);
+      const drag = dragRef.current;
+      if (drag && target && target !== drag.fromDay) moveRecipe(drag.fromDay, target, drag.itemId);
+      dragRef.current = null;
+      setDragId(null);
+      setOverDay(null);
+      setGhost(null);
+    },
+    [onDragMove, moveRecipe],
+  );
+
+  const startDrag = useCallback(
+    (e: React.PointerEvent, recipe: PlanRecipe, fromDay: Day) => {
+      if (!e.isPrimary) return;
+      e.preventDefault();
+      dragRef.current = { itemId: recipe.id, fromDay };
+      setDragId(recipe.id);
+      setOverDay(fromDay);
+      setGhost({ title: recipe.title, x: e.clientX, y: e.clientY });
+      window.addEventListener('pointermove', onDragMove);
+      window.addEventListener('pointerup', onDragEnd);
+      window.addEventListener('pointercancel', onDragEnd);
+    },
+    [onDragMove, onDragEnd],
+  );
 
   const filled = DAYS.filter((d) => plan[d.key].recipes.length > 0 || plan[d.key].note.trim()).length;
   const pickingLabel = picking ? DAYS.find((d) => d.key === picking)!.label : '';
@@ -268,14 +334,21 @@ export default function PlanScreen() {
         {DAYS.map((d) => {
           const { recipes, note } = plan[d.key];
           const has = recipes.length > 0 || note.trim().length > 0;
+          const isOver = overDay === d.key && dragRef.current?.fromDay !== d.key;
           return (
-            <div key={d.key} className={'day-card' + (has ? ' has' : '')}>
+            <div
+              key={d.key}
+              data-day={d.key}
+              className={'day-card' + (has ? ' has' : '') + (isOver ? ' drop-over' : '')}
+            >
               <div className="day-label">{d.label}</div>
 
               {recipes.map((r) => (
                 <DayRecipe
                   key={r.id}
                   recipe={r}
+                  dragging={dragId === r.id}
+                  onDragStart={(e) => startDrag(e, r, d.key)}
                   onServings={(s) => setServings(d.key, r.id, s)}
                   onRemove={() => removeRecipe(d.key, r.id)}
                 />
@@ -314,6 +387,12 @@ export default function PlanScreen() {
             setPicking(null);
           }}
         />
+      )}
+
+      {ghost && (
+        <div className="drag-ghost" style={{ left: ghost.x, top: ghost.y }}>
+          {ghost.title}
+        </div>
       )}
     </div>
   );

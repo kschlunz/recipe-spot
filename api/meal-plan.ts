@@ -134,6 +134,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ id: (inserted as any).id });
     }
 
+    // Move a dish to another day (drag-and-drop). Appends to the end of the
+    // target day so the moved dish lands last.
+    if ('item_id' in body && isDay(body.day)) {
+      const id = typeof body.item_id === 'string' ? body.item_id : '';
+      if (!id) return res.status(400).json({ error: 'Provide a valid item_id.' });
+      const day = body.day;
+      const { data: existing } = await supabase
+        .from('meal_plan_recipes')
+        .select('position')
+        .eq('day', day)
+        .order('position', { ascending: false })
+        .limit(1);
+      const position = ((existing?.[0] as any)?.position ?? -1) + 1;
+      const { error } = await supabase.from('meal_plan_recipes').update({ day, position }).eq('id', id);
+      if (error) return res.status(500).json({ error: error.message });
+      return res.status(200).json({ ok: true });
+    }
+
     // Set one dish's servings.
     if ('item_id' in body) {
       const id = typeof body.item_id === 'string' ? body.item_id : '';

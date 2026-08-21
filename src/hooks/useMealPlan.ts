@@ -104,6 +104,25 @@ export function useMealPlan() {
     await fetch(`/api/meal-plan?item=${encodeURIComponent(itemId)}`, { method: 'DELETE' });
   }, []);
 
+  // Move a placed dish from one day to another (drag-and-drop). Optimistic:
+  // the card jumps immediately, then we persist the new day.
+  const moveRecipe = useCallback(async (from: Day, to: Day, itemId: string) => {
+    if (from === to) return;
+    let moved: PlanRecipe | undefined;
+    setPlan((p) => {
+      moved = p[from].recipes.find((r) => r.id === itemId);
+      if (!moved) return p;
+      return {
+        ...p,
+        [from]: { ...p[from], recipes: p[from].recipes.filter((r) => r.id !== itemId) },
+        [to]: { ...p[to], recipes: [...p[to].recipes, moved!] },
+      };
+    });
+    if (itemId.startsWith('temp-')) return; // still being created; day is set on insert
+    await post({ item_id: itemId, day: to });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const setServings = useCallback(async (day: Day, itemId: string, servings: number) => {
     setPlan((p) => ({
       ...p,
@@ -130,5 +149,5 @@ export function useMealPlan() {
     await fetch('/api/meal-plan?all=1', { method: 'DELETE' });
   }, []);
 
-  return { plan, loading, error, refresh, addRecipe, removeRecipe, setNote, setServings, clearDay, clear };
+  return { plan, loading, error, refresh, addRecipe, removeRecipe, moveRecipe, setNote, setServings, clearDay, clear };
 }
