@@ -61,6 +61,8 @@ export function useRecipe(slug: string) {
   const [favorite, setFavorite] = useState(false);
   const [nutrition, setNutrition] = useState<Nutrition | null>(null);
   const [cost, setCost] = useState<number | null>(null);
+  const [cookedCount, setCookedCount] = useState(0);
+  const [lastCookedOn, setLastCookedOn] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,6 +82,8 @@ export function useRecipe(slug: string) {
           setFavorite(!!json.recipe?.favorite);
           setNutrition(json.recipe?.nutrition ?? null);
           setCost(json.recipe?.cost != null ? Number(json.recipe.cost) : null);
+          setCookedCount(Number(json.recipe?.cookedCount) || 0);
+          setLastCookedOn(json.recipe?.lastCookedOn ?? null);
         }
       } catch (e) {
         if (alive()) setError((e as Error).message);
@@ -98,6 +102,8 @@ export function useRecipe(slug: string) {
     setSourceUrl(null);
     setNutrition(null);
     setCost(null);
+    setCookedCount(0);
+    setLastCookedOn(null);
     load(() => on);
     return () => {
       on = false;
@@ -126,6 +132,8 @@ export function useRecipe(slug: string) {
     setNutrition,
     cost,
     setCost,
+    cookedCount,
+    lastCookedOn,
     loading,
     error,
     refresh,

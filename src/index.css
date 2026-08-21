@@ -2119,3 +2119,29 @@ tr.hot td.ing {
   background: transparent;
   color: #b3261e;
 }
+
+/* ── "Made N×" cook-count badges ─────────────────────────────────────── */
+.rcard-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 10px;
+}
+.rcard-meta .rcard-cal {
+  margin: 0; /* the meta row owns the spacing now */
+}
+.rcard-made {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--kale);
+  white-space: nowrap;
+}
+.rp-made {
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 0.03em;
+  color: var(--kale);
+  margin: 10px 0 0;
+}

@@ -79,6 +79,8 @@ export type RecipeSummary = {
   calories?: number | null;
   hasCost?: boolean;
   cost?: number | null;
+  cookedCount?: number;
+  lastCookedOn?: string | null;
 };
 
 /* ------------------------------------------------------------------ */
