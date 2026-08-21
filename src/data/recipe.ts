@@ -77,6 +77,8 @@ export type RecipeSummary = {
   favorite?: boolean;
   hasNutrition?: boolean;
   calories?: number | null;
+  hasCost?: boolean;
+  cost?: number | null;
 };
 
 /* ------------------------------------------------------------------ */
