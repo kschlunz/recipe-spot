@@ -160,6 +160,24 @@ create table if not exists public.shopping_checked (
 );
 alter table public.shopping_checked enable row level security;
 
+-- Cooking log: a running history of meals actually cooked, checked off from the
+-- weekly plan. Kept deliberately separate from favorites, and persistent — it
+-- survives clearing the week and even deleting the recipe (title is snapshotted,
+-- recipe_slug is not a foreign key). item_id links back to the meal_plan_recipes
+-- row it was checked from, so un-checking on the calendar can remove it.
+create table if not exists public.cook_log (
+  id          uuid primary key default gen_random_uuid(),
+  recipe_slug text not null,
+  title       text,
+  cooked_on   date not null default (now() at time zone 'utc')::date,
+  item_id     uuid,   -- the meal_plan_recipes row it was checked from (nullable)
+  day         text,   -- which day it was planned on, for context (nullable)
+  created_at  timestamptz not null default now()
+);
+create index if not exists cook_log_cooked_on_idx on public.cook_log (cooked_on desc, created_at desc);
+create index if not exists cook_log_item_idx on public.cook_log (item_id);
+alter table public.cook_log enable row level security;
+
 -- Cook notes: a timestamped log per recipe ("added more garlic, +5 min").
 create table if not exists public.cook_notes (
   id          uuid primary key default gen_random_uuid(),
