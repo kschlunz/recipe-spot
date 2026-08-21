@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Recipe, Ingredient, Nutrition } from '../data/recipe';
 import { beep, buildGrid, fmtClock, frac, metricRound, type Span } from '../lib/recipeGrid';
 import { formatHeat, parseDurationSeconds } from '../lib/heat';
+import { splitSteps } from '../lib/steps';
 
 type Props = {
   recipe: Recipe;
@@ -17,7 +18,9 @@ export default function RecipeView({ recipe, nutrition }: Props) {
   const [step, setStep] = useState(-1);
   const [remain, setRemain] = useState<number | null>(null); // null = no timer, -1 = rung
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const hasOriginal = !!recipe.sourceSteps?.length;
+  // Verbatim steps, split if the source jammed them into one numbered blob.
+  const origSteps = useMemo(() => splitSteps(recipe.sourceSteps ?? []), [recipe]);
+  const hasOriginal = origSteps.length > 0;
   // Imported recipes default to the source's exact steps (the grid can misread a
   // recipe); the toggle switches to the tabular grid.
   const [view, setView] = useState<'grid' | 'original'>(hasOriginal ? 'original' : 'grid');
@@ -35,7 +38,7 @@ export default function RecipeView({ recipe, nutrition }: Props) {
     setStruck(new Set());
     setStep(-1);
     setMult(1);
-    setView(recipe.sourceSteps?.length ? 'original' : 'grid');
+    setView(hasOriginal ? 'original' : 'grid');
   }, [recipe]);
 
   const cooking = step >= 0;
@@ -43,7 +46,6 @@ export default function RecipeView({ recipe, nutrition }: Props) {
   const nRows = recipe.ingredients.length;
   const nCols = spans.length;
   // Cook mode walks the grid columns, or the verbatim steps in Original view.
-  const origSteps = recipe.sourceSteps ?? [];
   const cookLen = view === 'original' ? origSteps.length : nCols;
 
   /* timer */
@@ -256,7 +258,7 @@ export default function RecipeView({ recipe, nutrition }: Props) {
         </div>
       )}
 
-      {view === 'original' && recipe.sourceSteps && (
+      {view === 'original' && origSteps.length > 0 && (
         <div className="original">
           <section className="stack-block">
             <h2 className="stack-h">Ingredients</h2>
@@ -279,7 +281,7 @@ export default function RecipeView({ recipe, nutrition }: Props) {
           <section className="stack-block">
             <h2 className="stack-h">Steps</h2>
             <ol className={'orig-steps' + (cooking ? ' cooking' : '')}>
-              {recipe.sourceSteps.map((s, i) => (
+              {origSteps.map((s, i) => (
                 <li key={i} className={cooking && step === i ? 'hot' : ''} onClick={() => goTo(i)}>
                   {s}
                 </li>
