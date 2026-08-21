@@ -41,6 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       serves?: number;
       servings: number | null;
       calories?: number | null;
+      cost?: number | null;
     };
     type Entry = { recipes: Recipe[]; note: string };
     const plan: Record<string, Entry> = {};
@@ -71,9 +72,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let rErr: any = null;
       ({ data: recipesData, error: rErr } = await supabase
         .from('recipes')
-        .select('slug, title, data, nutrition')
+        .select('slug, title, data, nutrition, cost')
         .in('slug', slugs));
-      if (rErr && /nutrition/i.test(rErr.message)) {
+      if (rErr) {
+        // nutrition and/or cost column not there yet — fall back to the base set.
         ({ data: recipesData, error: rErr } = await supabase
           .from('recipes')
           .select('slug, title, data')
@@ -97,6 +99,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         serves: Number(r.data?.serves) || undefined,
         servings: (row as any).servings ?? null,
         calories: Number(r.nutrition?.calories) || null,
+        cost: Number(r.cost) || null,
       });
     }
 

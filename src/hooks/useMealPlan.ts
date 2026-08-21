@@ -24,7 +24,12 @@ export type PlanEntry = {
 };
 // A recipe placed on a day: a PlanEntry plus its meal_plan_recipes row id and
 // its per-dish target servings.
-export type PlanRecipe = PlanEntry & { id: string; servings: number | null; calories?: number | null };
+export type PlanRecipe = PlanEntry & {
+  id: string;
+  servings: number | null;
+  calories?: number | null;
+  cost?: number | null;
+};
 export type DayPlan = { recipes: PlanRecipe[]; note: string };
 export type Plan = Record<Day, DayPlan>;
 
