@@ -140,6 +140,7 @@ export default function PlanScreen() {
 
   const dayCalories = (key: Day) => plan[key].recipes.reduce((s, r) => s + (r.calories || 0), 0);
   const weekCalories = DAYS.reduce((s, d) => s + dayCalories(d.key), 0);
+  const weekCost = DAYS.reduce((s, d) => s + plan[d.key].recipes.reduce((t, r) => t + (r.cost || 0), 0), 0);
 
   // A day is "open" for the randomizer only if it has no recipe and no note, so
   // we never overwrite something you've set (a recipe, or "eat out").
@@ -220,6 +221,19 @@ export default function PlanScreen() {
               title="Sum of per-serving calories across the week (estimated)"
             >
               ≈ {weekCalories.toLocaleString()} cal/wk
+            </span>
+          )}
+          {weekCost > 0 && (
+            <span
+              style={{
+                fontFamily: "'Space Mono', monospace",
+                fontSize: 12,
+                color: 'var(--turmeric)',
+                letterSpacing: '0.06em',
+              }}
+              title="Estimated grocery cost of the week's recipes"
+            >
+              ≈ ${Math.round(weekCost)}/wk
             </span>
           )}
           <button
