@@ -71,11 +71,64 @@ function sharedIngredients(recipes: any[]): string[] {
     .map(([name]) => name);
 }
 
+// Coarse "kind of dish" buckets, so the week doesn't turn into three pastas just
+// because pasta dishes share the most ingredients. Uncategorized dishes (no
+// match) are never capped.
+const FORMATS: Array<[string, RegExp]> = [
+  ['pasta', /\b(pasta|spaghetti|penne|linguine|fettuccine|rigatoni|macaroni|lasagna|noodles?|ramen|udon|orzo|gnocchi|carbonara|bolognese|alfredo|ziti|tortellini|cacio)\b/i],
+  ['soup', /\b(soup|stew|chowder|chili|bisque|broth)\b/i],
+  ['salad', /\b(salad|slaw)\b/i],
+  ['taco', /\b(tacos?|burritos?|quesadillas?|enchiladas?|fajitas?|tostadas?|nachos?)\b/i],
+  ['stirfry', /\b(stir[- ]?fry|stir[- ]?fried|lo mein|fried rice)\b/i],
+  ['curry', /\b(curry|tikka|masala|korma|dal|daal|vindaloo)\b/i],
+  ['pizza', /\b(pizza|flatbread|calzone)\b/i],
+  ['sandwich', /\b(sandwich|burgers?|wraps?|panini|melt|sloppy)\b/i],
+  ['bowl', /\b(grain bowl|rice bowl|buddha bowl|burrito bowl|poke)\b/i],
+  ['rice', /\b(risotto|paella|pilaf|biryani|jambalaya)\b/i],
+];
+function dishFormat(r: any): string {
+  const hay = `${r?.title ?? ''} ${r?.data?.eyebrow ?? ''} ${(r?.tags ?? []).join(' ')}`;
+  for (const [name, re] of FORMATS) if (re.test(hay)) return name;
+  return '';
+}
+
+// Turn an ordered candidate list into the final picks, keeping at most two
+// dishes of the same kind for variety; if that leaves us short (small library),
+// relax the cap so every open day still gets filled.
+function assembleWithVariety(ordered: string[], fallback: any[], bySlug: Map<string, any>, n: number): string[] {
+  const FORMAT_CAP = 2;
+  const seen = new Set<string>();
+  const fmtCount = new Map<string, number>();
+  const out: string[] = [];
+  const tryAdd = (slug: string): void => {
+    if (out.length >= n || seen.has(slug) || !bySlug.has(slug)) return;
+    const f = dishFormat(bySlug.get(slug));
+    if (f && (fmtCount.get(f) ?? 0) >= FORMAT_CAP) return;
+    seen.add(slug);
+    if (f) fmtCount.set(f, (fmtCount.get(f) ?? 0) + 1);
+    out.push(slug);
+  };
+  for (const s of ordered) tryAdd(s);
+  for (const r of fallback) tryAdd(r.slug);
+  // Cap left us short — fill the rest ignoring the cap so no day stays empty.
+  if (out.length < n) {
+    for (const r of fallback) {
+      if (out.length >= n) break;
+      if (!seen.has(r.slug)) {
+        seen.add(r.slug);
+        out.push(r.slug);
+      }
+    }
+  }
+  return out.slice(0, n);
+}
+
 // Ask Claude for an ordered list of slugs that overlap on ingredients; fall back
 // to a shuffle on any trouble.
 async function chooseSlugs(recipes: any[], n: number, planned: any[]): Promise<string[]> {
   const shuffled = shuffle(recipes); // vary input order so ties break differently
-  if (!process.env.ANTHROPIC_API_KEY) return shuffled.slice(0, n).map((r) => r.slug);
+  const bySlug = new Map(recipes.map((r) => [r.slug, r]));
+  if (!process.env.ANTHROPIC_API_KEY) return assembleWithVariety([], shuffled, bySlug, n);
   try {
     const list = shuffled
       .map((r) => {
@@ -100,9 +153,11 @@ async function chooseSlugs(recipes: any[], n: number, planned: any[]): Promise<s
         'recipes already planned this week — reuse the same ingredients across multiple meals. Prioritize ' +
         'overlap on FRESH PRODUCE (vegetables, herbs, greens) and other perishables that would otherwise ' +
         'be bought and go to waste; a shared pantry staple (salt, oil, flour) does not count. Prefer sets ' +
-        'where several recipes share multiple ingredients. Keep the picks health-leaning, and never choose ' +
-        'a dessert, sweet, or baked treat. Respond with ONLY a JSON array of exactly N recipe slugs, ' +
-        'best-overlap first, using only slugs from the list.',
+        'where several recipes share multiple ingredients. BUT keep the week VARIED — nobody wants the ' +
+        'same dinner twice: do NOT pick more than two dishes of the same kind (e.g. not three pastas), and ' +
+        'vary the format and cuisine across the days. Balance ingredient overlap against variety. Keep the ' +
+        'picks health-leaning, and never choose a dessert, sweet, or baked treat. Respond with ONLY a JSON ' +
+        'array of exactly N recipe slugs, best pick first, using only slugs from the list.',
       messages: [{ role: 'user', content: `${plannedLine}N = ${n}\n\nRecipes to choose from:\n${list}` }],
     });
     const text = msg.content
@@ -114,19 +169,10 @@ async function chooseSlugs(recipes: any[], n: number, planned: any[]): Promise<s
     const arr = JSON.parse(text);
     const valid = new Set(recipes.map((r) => r.slug));
     const picks = Array.isArray(arr) ? arr.filter((s) => typeof s === 'string' && valid.has(s)) : [];
-    const seen = new Set<string>();
-    const deduped = picks.filter((s) => (seen.has(s) ? false : (seen.add(s), true)));
-    // Top up from the shuffle if the model returned too few.
-    for (const r of shuffled) {
-      if (deduped.length >= n) break;
-      if (!seen.has(r.slug)) {
-        deduped.push(r.slug);
-        seen.add(r.slug);
-      }
-    }
-    return deduped.slice(0, n);
+    // Enforce variety (cap same-kind dishes) and top up from the shuffle.
+    return assembleWithVariety(picks, shuffled, bySlug, n);
   } catch {
-    return shuffled.slice(0, n).map((r) => r.slug);
+    return assembleWithVariety([], shuffled, bySlug, n);
   }
 }
 
