@@ -8,6 +8,7 @@ import { FAVORITES_ENABLED } from '../lib/flags';
 import { buildGrid } from '../lib/recipeGrid';
 import { effectiveTags } from '../lib/tags';
 import { fileToResizedBase64, imageFromClipboard } from '../lib/image';
+import { shareRecipe } from '../lib/share';
 import { STEW, type Recipe } from '../data/recipe';
 import { DAYS, type Day } from '../hooks/useMealPlan';
 
@@ -175,6 +176,7 @@ export default function RecipePage({ slug }: { slug: string }) {
   const [costBusy, setCostBusy] = useState(false);
   const [actionErr, setActionErr] = useState('');
   const [infoMsg, setInfoMsg] = useState('');
+  const [shareMsg, setShareMsg] = useState('');
 
   const calcCost = async () => {
     setCostBusy(true);
@@ -266,6 +268,19 @@ export default function RecipePage({ slug }: { slug: string }) {
   const shown = recipe ?? (slug === 'the-stew' ? STEW : null);
   const editable = recipe !== null; // only DB-backed recipes can be edited
 
+  // Share this recipe: native share sheet on phones, copy-link fallback
+  // elsewhere. Feedback clears itself after a couple of seconds.
+  const share = async () => {
+    if (!shown) return;
+    const result = await shareRecipe(slug, shown.title, shown.tagline);
+    if (result === 'shared' || result === 'cancelled') {
+      setShareMsg('');
+      return;
+    }
+    setShareMsg(result === 'copied' ? '✓ Link copied to clipboard' : 'Could not copy the link.');
+    window.setTimeout(() => setShareMsg(''), 2500);
+  };
+
   // Paste an image anywhere on the page to set the dish photo.
   const uploadRef = useRef(uploadPhoto);
   uploadRef.current = uploadPhoto;
@@ -344,6 +359,9 @@ export default function RecipePage({ slug }: { slug: string }) {
                     {wake.active ? '🔆 Screen staying on' : '🌙 Keep screen on'}
                   </button>
                 )}
+                <button onClick={share} title="Share this recipe">
+                  🔗 Share
+                </button>
                 <button onClick={() => window.print()}>Print</button>
                 {editable && (
                   <button
@@ -403,6 +421,7 @@ export default function RecipePage({ slug }: { slug: string }) {
           )}
           {actionErr && <p className="status-line err">{actionErr}</p>}
           {infoMsg && <p className="status-line">{infoMsg}</p>}
+          {shareMsg && <p className="status-line ok">{shareMsg}</p>}
           {editable && !photoUrl && (
             <button
               type="button"
