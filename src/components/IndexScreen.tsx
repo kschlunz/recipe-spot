@@ -4,15 +4,14 @@ import type { RecipeSummary } from '../data/recipe';
 import { effectiveTags, tagKey } from '../lib/tags';
 import Heart from './Heart';
 import { FAVORITES_ENABLED } from '../lib/flags';
-import { shareRecipe, copyText } from '../lib/share';
-import { ingredientsToText } from '../lib/ingredients';
+import { shareRecipe } from '../lib/share';
+import ShareIcon from './ShareIcon';
 
 const CAT_LIMIT = 16; // categories shown in the sidebar before "show all"
 
 function RecipeCard({ r, onFav }: { r: RecipeSummary; onFav: (slug: string) => void }) {
   const tags = effectiveTags(r.tags, r.eyebrow);
   const [copied, setCopied] = useState(false);
-  const [ingState, setIngState] = useState<'idle' | 'loading' | 'done' | 'err'>('idle');
 
   // Share without leaving the list. Stop the click from following the card link.
   const onShare = async (e: React.MouseEvent) => {
@@ -25,35 +24,6 @@ function RecipeCard({ r, onFav }: { r: RecipeSummary; onFav: (slug: string) => v
     }
   };
 
-  // Cards carry only summary data, so fetch the full recipe to get its
-  // ingredients, format them, and copy to the clipboard.
-  const onCopyIngredients = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (ingState === 'loading') return;
-    setIngState('loading');
-    try {
-      const res = await fetch(`/api/recipes?slug=${encodeURIComponent(r.slug)}`);
-      const json = await res.json().catch(() => ({}));
-      const recipe = json.recipe?.data;
-      if (!recipe?.ingredients?.length) throw new Error('no ingredients');
-      const ok = await copyText(ingredientsToText(recipe));
-      setIngState(ok ? 'done' : 'err');
-    } catch {
-      setIngState('err');
-    }
-    window.setTimeout(() => setIngState('idle'), 1900);
-  };
-
-  const ingLabel =
-    ingState === 'loading'
-      ? 'Copying…'
-      : ingState === 'done'
-        ? '✓ Ingredients copied'
-        : ingState === 'err'
-          ? 'Couldn’t copy'
-          : '📋 Copy ingredients';
-
   return (
     <a className="rcard" href={`#/r/${r.slug}`}>
       <button
@@ -63,7 +33,7 @@ function RecipeCard({ r, onFav }: { r: RecipeSummary; onFav: (slug: string) => v
         title={copied ? 'Link copied' : 'Share'}
         onClick={onShare}
       >
-        {copied ? '✓' : '🔗'}
+        {copied ? '✓' : <ShareIcon size={17} />}
       </button>
       {FAVORITES_ENABLED && <Heart on={!!r.favorite} onClick={() => onFav(r.slug)} className="rcard-heart" />}
       {r.eyebrow && <p className="eyebrow">{r.eyebrow}</p>}
@@ -84,15 +54,6 @@ function RecipeCard({ r, onFav }: { r: RecipeSummary; onFav: (slug: string) => v
           </span>
         ) : null}
       </div>
-      <button
-        type="button"
-        className={'rcard-copy' + (ingState === 'done' ? ' done' : '') + (ingState === 'err' ? ' err' : '')}
-        onClick={onCopyIngredients}
-        title="Copy this recipe's ingredient list to the clipboard"
-        disabled={ingState === 'loading'}
-      >
-        {ingLabel}
-      </button>
     </a>
   );
 }
