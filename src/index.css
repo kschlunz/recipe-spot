@@ -364,6 +364,32 @@ a {
   right: 8px;
   padding: 6px;
 }
+/* Share icon, sitting just left of the heart (or top-right when solo). */
+.rcard-share {
+  position: absolute;
+  top: 9px;
+  right: 42px;
+  padding: 5px 6px;
+  border: 0;
+  background: transparent;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--ink-soft);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: transform 0.1s, color 0.1s, background 0.1s;
+}
+.rcard-share.solo {
+  right: 8px;
+}
+.rcard-share:hover {
+  color: var(--turmeric);
+  transform: scale(1.12);
+  background: rgba(27, 34, 28, 0.05);
+}
+.rcard-share.copied {
+  color: var(--kale);
+}
 .rp-heart {
   padding: 4px 6px;
   border: 1.5px solid var(--rule);

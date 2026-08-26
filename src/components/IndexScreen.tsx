@@ -4,13 +4,36 @@ import type { RecipeSummary } from '../data/recipe';
 import { effectiveTags, tagKey } from '../lib/tags';
 import Heart from './Heart';
 import { FAVORITES_ENABLED } from '../lib/flags';
+import { shareRecipe } from '../lib/share';
 
 const CAT_LIMIT = 16; // categories shown in the sidebar before "show all"
 
 function RecipeCard({ r, onFav }: { r: RecipeSummary; onFav: (slug: string) => void }) {
   const tags = effectiveTags(r.tags, r.eyebrow);
+  const [copied, setCopied] = useState(false);
+
+  // Share without leaving the list. Stop the click from following the card link.
+  const onShare = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const result = await shareRecipe(r.slug, r.title, r.tagline);
+    if (result === 'copied') {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    }
+  };
+
   return (
     <a className="rcard" href={`#/r/${r.slug}`}>
+      <button
+        type="button"
+        className={'rcard-share' + (FAVORITES_ENABLED ? '' : ' solo') + (copied ? ' copied' : '')}
+        aria-label="Share this recipe"
+        title={copied ? 'Link copied' : 'Share'}
+        onClick={onShare}
+      >
+        {copied ? '✓' : '🔗'}
+      </button>
       {FAVORITES_ENABLED && <Heart on={!!r.favorite} onClick={() => onFav(r.slug)} className="rcard-heart" />}
       {r.eyebrow && <p className="eyebrow">{r.eyebrow}</p>}
       <h3>{r.title}</h3>
