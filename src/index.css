@@ -2174,3 +2174,36 @@ tr.hot td.ing {
   color: var(--kale);
   margin: 10px 0 0;
 }
+
+/* ── Copy-ingredients button on recipe cards ─────────────────────────── */
+.rcard-copy {
+  margin-top: 12px;
+  align-self: flex-start;
+  border: 1.5px solid var(--rule);
+  background: transparent;
+  padding: 5px 10px;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: color 0.1s, border-color 0.1s, background 0.1s;
+}
+.rcard-copy:hover {
+  color: var(--turmeric);
+  border-color: var(--turmeric);
+  background: transparent;
+}
+.rcard-copy.done {
+  color: var(--kale);
+  border-color: var(--kale);
+}
+.rcard-copy.err {
+  color: #9a3412;
+  border-color: var(--turmeric);
+}
+.rcard-copy:disabled {
+  opacity: 0.7;
+  cursor: default;
+}

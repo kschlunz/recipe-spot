@@ -13,7 +13,7 @@ export function recipeUrl(slug: string): string {
 
 // Best-effort clipboard copy: the async Clipboard API when available (secure
 // contexts), else a hidden-textarea + execCommand fallback for older Safari.
-async function copyToClipboard(text: string): Promise<boolean> {
+export async function copyText(text: string): Promise<boolean> {
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
@@ -54,5 +54,5 @@ export async function shareRecipe(slug: string, title: string, tagline?: string)
       // Any other share failure: fall back to copying the link.
     }
   }
-  return (await copyToClipboard(url)) ? 'copied' : 'error';
+  return (await copyText(url)) ? 'copied' : 'error';
 }
