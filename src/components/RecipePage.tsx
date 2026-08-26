@@ -8,7 +8,9 @@ import { FAVORITES_ENABLED } from '../lib/flags';
 import { buildGrid } from '../lib/recipeGrid';
 import { effectiveTags } from '../lib/tags';
 import { fileToResizedBase64, imageFromClipboard } from '../lib/image';
-import { shareRecipe } from '../lib/share';
+import { shareRecipe, copyText } from '../lib/share';
+import { ingredientsToText } from '../lib/ingredients';
+import ShareIcon from './ShareIcon';
 import { STEW, type Recipe } from '../data/recipe';
 import { DAYS, type Day } from '../hooks/useMealPlan';
 
@@ -177,6 +179,7 @@ export default function RecipePage({ slug }: { slug: string }) {
   const [actionErr, setActionErr] = useState('');
   const [infoMsg, setInfoMsg] = useState('');
   const [shareMsg, setShareMsg] = useState('');
+  const [ingCopied, setIngCopied] = useState(false);
 
   const calcCost = async () => {
     setCostBusy(true);
@@ -281,6 +284,19 @@ export default function RecipePage({ slug }: { slug: string }) {
     window.setTimeout(() => setShareMsg(''), 2500);
   };
 
+  // Copy this recipe's ingredient list to the clipboard. We already have the
+  // full recipe here, so no fetch needed.
+  const copyIngredients = async () => {
+    if (!shown) return;
+    const ok = await copyText(ingredientsToText(shown));
+    if (ok) {
+      setIngCopied(true);
+      window.setTimeout(() => setIngCopied(false), 1800);
+    } else {
+      setActionErr('Could not copy the ingredients.');
+    }
+  };
+
   // Paste an image anywhere on the page to set the dish photo.
   const uploadRef = useRef(uploadPhoto);
   uploadRef.current = uploadPhoto;
@@ -359,8 +375,11 @@ export default function RecipePage({ slug }: { slug: string }) {
                     {wake.active ? '🔆 Screen staying on' : '🌙 Keep screen on'}
                   </button>
                 )}
-                <button onClick={share} title="Share this recipe">
-                  🔗 Share
+                <button onClick={share} title="Share this recipe" className="rp-share">
+                  <ShareIcon size={15} /> Share
+                </button>
+                <button onClick={copyIngredients} title="Copy the ingredient list to the clipboard">
+                  {ingCopied ? '✓ Ingredients copied' : '📋 Copy ingredients'}
                 </button>
                 <button onClick={() => window.print()}>Print</button>
                 {editable && (
