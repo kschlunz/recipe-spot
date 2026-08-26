@@ -1129,6 +1129,9 @@ tr.hot td.ing {
   border: 1.5px solid var(--turmeric);
   padding: 8px 10px;
 }
+.status-line.ok {
+  color: var(--kale);
+}
 .preview-banner {
   display: flex;
   flex-wrap: wrap;
