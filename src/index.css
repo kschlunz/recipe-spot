@@ -2332,3 +2332,20 @@ tr.hot td.ing {
   background: transparent;
   color: #b3261e;
 }
+
+.trip-setup {
+  border: 2px solid var(--turmeric);
+  background: var(--turmeric-wash);
+  padding: 12px 14px;
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.trip-setup code {
+  font-family: 'Space Mono', monospace;
+  font-size: 12.5px;
+  background: rgba(27, 34, 28, 0.08);
+  padding: 1px 5px;
+  border-radius: 3px;
+}

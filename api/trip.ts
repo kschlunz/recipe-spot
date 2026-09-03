@@ -42,7 +42,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .order('day_index', { ascending: true })
       .order('position', { ascending: true })
       .order('created_at', { ascending: true });
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      // Tables not created yet — respond gracefully so the page still loads and
+      // can point the user at the one-time database setup.
+      if (/does not exist/i.test(error.message)) {
+        res.setHeader('Cache-Control', 'no-store');
+        return res.status(200).json({
+          info: { title: '', startDate: null, notes: '' },
+          meals: [],
+          needsSetup: true,
+        });
+      }
+      return res.status(500).json({ error: error.message });
+    }
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({
       info: {

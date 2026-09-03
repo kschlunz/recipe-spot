@@ -21,6 +21,7 @@ export function useTrip() {
   const [meals, setMeals] = useState<TripMeal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [needsSetup, setNeedsSetup] = useState(false);
 
   const refresh = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -31,6 +32,7 @@ export function useTrip() {
       const json = await res.json();
       setInfoState(json.info ?? { title: '', startDate: null, notes: '' });
       setMeals(Array.isArray(json.meals) ? json.meals : []);
+      setNeedsSetup(!!json.needsSetup);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -96,5 +98,5 @@ export function useTrip() {
     await fetch('/api/trip?all=1', { method: 'DELETE' });
   }, []);
 
-  return { info, meals, loading, error, refresh, saveInfo, addMeal, updateMeal, removeMeal, clearMeals };
+  return { info, meals, loading, error, needsSetup, refresh, saveInfo, addMeal, updateMeal, removeMeal, clearMeals };
 }
