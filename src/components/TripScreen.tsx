@@ -82,7 +82,8 @@ function BlurInput({
 }
 
 export default function TripScreen() {
-  const { info, meals, loading, error, saveInfo, addMeal, updateMeal, removeMeal, clearMeals } = useTrip();
+  const { info, meals, loading, error, needsSetup, saveInfo, addMeal, updateMeal, removeMeal, clearMeals } =
+    useTrip();
   const [notes, setNotes] = useState(info.notes);
   useEffect(() => setNotes(info.notes), [info.notes]);
 
@@ -132,6 +133,14 @@ export default function TripScreen() {
       </div>
 
       {error && <p className="status-line err">{error}</p>}
+
+      {needsSetup && (
+        <div className="trip-setup">
+          <b>One-time setup needed.</b> The trip planner needs its database tables. In Supabase → SQL
+          Editor, run the <code>trip_info</code> and <code>trip_meals</code> block from{' '}
+          <code>supabase-schema.sql</code>, then reload this page. Until then, meals won’t save.
+        </div>
+      )}
 
       <div className="trip-notes-card">
         <label className="trip-notes-label" htmlFor="trip-notes">
