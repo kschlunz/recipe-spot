@@ -2187,3 +2187,148 @@ tr.hot td.ing {
 .rp-share svg {
   margin-top: -1px;
 }
+
+/* ── Trip planner ────────────────────────────────────────────────────── */
+.trip-title {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 800;
+  font-size: clamp(34px, 6vw, 60px);
+  letter-spacing: -0.045em;
+  line-height: 0.9;
+  color: var(--ink);
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  max-width: 520px;
+}
+.trip-title:focus-visible {
+  outline: 2.5px solid var(--turmeric);
+  outline-offset: 4px;
+}
+.trip-subhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin-top: 12px;
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+.trip-date {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  border: 1.5px solid var(--rule);
+  background: var(--card);
+  color: var(--ink);
+  padding: 3px 7px;
+}
+.trip-count {
+  color: var(--turmeric);
+}
+
+.trip-notes-card {
+  border: 2px solid var(--rule);
+  background: var(--card);
+  padding: 14px 16px;
+  margin: 0 0 26px;
+}
+.trip-notes-label {
+  display: block;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--turmeric);
+  margin-bottom: 8px;
+}
+.trip-notes {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: 'Instrument Sans', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  resize: vertical;
+}
+.trip-notes:focus-visible {
+  outline: 2px solid var(--turmeric);
+  outline-offset: 4px;
+}
+
+.trip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 16px;
+}
+.trip-day-date {
+  color: var(--ink-soft);
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+.trip-meal {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(27, 34, 28, 0.12);
+}
+.trip-meal:last-of-type {
+  border-bottom: 0;
+}
+.trip-meal-what {
+  width: 100%;
+  border: 1.5px solid var(--rule);
+  background: var(--card);
+  color: var(--ink);
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  padding: 6px 8px;
+}
+.trip-meal-who-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.trip-who-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--kale);
+}
+.trip-meal-who {
+  flex: 1;
+  min-width: 0;
+  border: 1.5px solid var(--rule);
+  background: var(--kale-wash);
+  color: var(--ink);
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  padding: 4px 7px;
+}
+.trip-meal-what:focus-visible,
+.trip-meal-who:focus-visible {
+  outline: 2px solid var(--turmeric);
+  outline-offset: 1px;
+}
+.trip-meal-remove {
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 5px;
+  cursor: pointer;
+}
+.trip-meal-remove:hover {
+  background: transparent;
+  color: #b3261e;
+}

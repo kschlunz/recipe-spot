@@ -178,6 +178,30 @@ create index if not exists cook_log_cooked_on_idx on public.cook_log (cooked_on 
 create index if not exists cook_log_item_idx on public.cook_log (item_id);
 alter table public.cook_log enable row level security;
 
+-- Trip planner: a standalone week away (e.g. a Saturday–Saturday beach trip)
+-- with meals per day, who's responsible for each, and a shared notes field.
+-- A single persistent trip board, like the weekly meal plan. 8 day slots so a
+-- Saturday-to-Saturday trip fits (index 0 = first Saturday … 7 = last Saturday).
+create table if not exists public.trip_info (
+  id         int primary key default 1 check (id = 1),   -- single row
+  title      text,
+  start_date date,
+  notes      text,
+  updated_at timestamptz default now()
+);
+alter table public.trip_info enable row level security;
+
+create table if not exists public.trip_meals (
+  id         uuid primary key default gen_random_uuid(),
+  day_index  int not null check (day_index between 0 and 7),
+  meal       text,
+  who        text,
+  position   int default 0,
+  created_at timestamptz default now()
+);
+create index if not exists trip_meals_day_idx on public.trip_meals(day_index, position, created_at);
+alter table public.trip_meals enable row level security;
+
 -- Cook notes: a timestamped log per recipe ("added more garlic, +5 min").
 create table if not exists public.cook_notes (
   id          uuid primary key default gen_random_uuid(),
