@@ -26,6 +26,47 @@ export const config = { maxDuration: 30 };
 const anthropic = new Anthropic();
 const NOTE_MODEL = 'claude-haiku-4-5';
 
+// Shared shopping-list checkmarks used to live at /api/shopping-checks. They're
+// merged in here (routed via a vercel.json rewrite to ?resource=checks) to stay
+// under the Hobby-plan serverless-function limit. A checked item is stored by
+// its normalized name key, so both people in the household see the same ticks.
+const norm = (v: unknown) => (typeof v === 'string' ? v.trim().toLowerCase() : '');
+
+async function handleChecks(req: VercelRequest, res: VercelResponse, supabase: SupabaseClient) {
+  if (req.method === 'GET') {
+    const { data, error } = await supabase.from('shopping_checked').select('item_key');
+    if (error) return res.status(500).json({ error: error.message });
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json({ checked: (data ?? []).map((r: any) => r.item_key) });
+  }
+
+  if (req.method === 'POST') {
+    const key = norm((req.body ?? {}).key);
+    if (!key) return res.status(400).json({ error: 'Provide an item key.' });
+    const { error } = await supabase
+      .from('shopping_checked')
+      .upsert({ item_key: key }, { onConflict: 'item_key' });
+    if (error) return res.status(500).json({ error: error.message });
+    return res.status(200).json({ ok: true });
+  }
+
+  if (req.method === 'DELETE') {
+    if (req.query.all) {
+      const { error } = await supabase.from('shopping_checked').delete().neq('item_key', '');
+      if (error) return res.status(500).json({ error: error.message });
+      return res.status(200).json({ ok: true });
+    }
+    const key = norm(req.query.key);
+    if (!key) return res.status(400).json({ error: 'Provide ?key=… or ?all=1.' });
+    const { error } = await supabase.from('shopping_checked').delete().eq('item_key', key);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.status(200).json({ ok: true });
+  }
+
+  res.setHeader('Allow', 'GET, POST, DELETE');
+  return res.status(405).json({ error: 'Method not allowed' });
+}
+
 // Notes that obviously need nothing bought — skip before ever calling the model.
 const NOTE_SKIP =
   /^(left ?overs?|eat(ing)? out|out to eat|dinner out|take[- ]?out|takeaway|order (in|out)|delivery|dining out|restaurant|fend for yourself|nothing|none|n\/a|tbd|\?+)\.?$/i;
@@ -93,12 +134,17 @@ async function groceriesFromNotes(notes: string[]): Promise<string[]> {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const supabase = client(res);
+  if (!supabase) return;
+
+  // Shared shopping-list checkmarks (formerly /api/shopping-checks).
+  if (req.query.resource === 'checks') return handleChecks(req, res, supabase);
+
+  // The shopping list itself is GET-only.
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
     return res.status(405).json({ error: 'Method not allowed' });
   }
-  const supabase = client(res);
-  if (!supabase) return;
 
   // Recipes are a list per day (meal_plan_recipes); notes live on meal_plan.
   const { data: planned, error } = await supabase
