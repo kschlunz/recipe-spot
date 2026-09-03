@@ -6,6 +6,7 @@ import PlanScreen from './components/PlanScreen';
 import ShoppingScreen from './components/ShoppingScreen';
 import FridgeScreen from './components/FridgeScreen';
 import CookedScreen from './components/CookedScreen';
+import TripScreen from './components/TripScreen';
 
 type Route =
   | { name: 'index' }
@@ -14,6 +15,7 @@ type Route =
   | { name: 'shopping' }
   | { name: 'fridge' }
   | { name: 'cooked' }
+  | { name: 'trip' }
   | { name: 'recipe'; slug: string };
 
 function parseRoute(): Route {
@@ -23,6 +25,7 @@ function parseRoute(): Route {
   if (hash === '/shopping') return { name: 'shopping' };
   if (hash === '/fridge') return { name: 'fridge' };
   if (hash === '/cooked') return { name: 'cooked' };
+  if (hash === '/trip') return { name: 'trip' };
   const m = hash.match(/^\/r\/([^/]+)/);
   if (m) return { name: 'recipe', slug: decodeURIComponent(m[1]) };
   return { name: 'index' };
@@ -44,6 +47,9 @@ function TopBar({ active }: { active: Route['name'] }) {
         </a>
         <a href="#/plan" className={'navlink' + (active === 'plan' ? ' on' : '')}>
           This Week
+        </a>
+        <a href="#/trip" className={'navlink' + (active === 'trip' ? ' on' : '')}>
+          Trip
         </a>
         <a href="#/shopping" className={'navlink' + (active === 'shopping' ? ' on' : '')}>
           Shopping
@@ -77,6 +83,7 @@ export default function App() {
       {route.name === 'shopping' && <ShoppingScreen />}
       {route.name === 'fridge' && <FridgeScreen />}
       {route.name === 'cooked' && <CookedScreen />}
+      {route.name === 'trip' && <TripScreen />}
       {route.name === 'recipe' && <RecipePage slug={route.slug} />}
     </>
   );
