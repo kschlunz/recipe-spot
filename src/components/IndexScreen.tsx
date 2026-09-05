@@ -259,6 +259,9 @@ export default function IndexScreen() {
                 {showAllCats ? 'show less' : `+${categories.length - CAT_LIMIT} more`}
               </button>
             )}
+            <a className="hhg-link" href="#/heart-healthy">
+              <HeartHealthyIcon size={13} /> Heart-healthy guide →
+            </a>
           </aside>
         )}
 

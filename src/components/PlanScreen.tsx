@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DAYS, useMealPlan, type Day, type PlanEntry, type PlanRecipe } from '../hooks/useMealPlan';
 import { useRecipeList } from '../hooks/useRecipes';
+import HeartHealthyIcon from './HeartHealthyIcon';
 
 const DAY_KEYS = DAYS.map((d) => d.key) as readonly string[];
 
@@ -176,6 +177,24 @@ export default function PlanScreen() {
   const [picking, setPicking] = useState<Day | null>(null);
   const [filling, setFilling] = useState(false);
   const [fillMsg, setFillMsg] = useState('');
+  // "Fill my week" heart-healthy-only preference, remembered per device.
+  const [heartOnly, setHeartOnly] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('fill-heart-only') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleHeartOnly = () =>
+    setHeartOnly((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem('fill-heart-only', next ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
 
   // Drag-and-drop to move a dish to another day. Pointer-based so it works with
   // both a mouse and a finger (native HTML5 DnD doesn't fire on touch).
@@ -239,7 +258,7 @@ export default function PlanScreen() {
       const res = await fetch('/api/plan-suggest', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ days: openDays.map((d) => d.key) }),
+        body: JSON.stringify({ days: openDays.map((d) => d.key), heartHealthyOnly: heartOnly }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
@@ -321,13 +340,22 @@ export default function PlanScreen() {
               ≈ ${Math.round(weekCost)}/wk
             </span>
           )}
+          <label
+            className={'heart-only-toggle' + (heartOnly ? ' on' : '')}
+            title="When on, Fill my week only picks recipes labeled heart-healthy"
+          >
+            <input type="checkbox" checked={heartOnly} onChange={toggleHeartOnly} />
+            <HeartHealthyIcon size={14} /> Heart-healthy only
+          </label>
           <button
             onClick={fillWeek}
             disabled={filling || openDays.length === 0}
             title={
               openDays.length === 0
                 ? 'Every day already has something'
-                : 'Fill the empty days with recipes that share ingredients, to use up produce and cut shopping'
+                : heartOnly
+                  ? 'Fill the empty days with heart-healthy recipes'
+                  : 'Fill the empty days with recipes that share ingredients, to use up produce and cut shopping'
             }
           >
             {filling ? 'Filling…' : '🧺 Fill my week'}

@@ -188,13 +188,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ? (req.body.days as string[]).filter((d) => DAYS.includes(d))
     : [];
   if (days.length === 0) return res.status(400).json({ error: 'Provide the days to fill.' });
+  const heartOnly = (req.body ?? {}).heartHealthyOnly === true;
 
-  // Include nutrition (for calorie balancing) with a graceful fallback if the
-  // column isn't there yet.
+  // Include nutrition (for calorie balancing) and the heart-healthy verdict,
+  // with a graceful fallback if those columns aren't there yet.
   let recipes: any[] | null = null;
   let error: any = null;
-  ({ data: recipes, error } = await supabase.from('recipes').select('slug, title, data, tags, nutrition'));
-  if (error && /nutrition/i.test(error.message)) {
+  ({ data: recipes, error } = await supabase
+    .from('recipes')
+    .select('slug, title, data, tags, nutrition, heart_healthy'));
+  if (error) {
     ({ data: recipes, error } = await supabase.from('recipes').select('slug, title, data, tags'));
   }
   if (error) return res.status(500).json({ error: error.message });
@@ -213,7 +216,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // up front, along with anything already on the plan. If somehow everything is
   // filtered out, fall back so the button still does something.
   const mains = recipes.filter((r: any) => !isDessert(r) && !plannedSlugs.has(r.slug));
-  const pool = mains.length > 0 ? mains : recipes.filter((r: any) => !isDessert(r));
+  let pool = mains.length > 0 ? mains : recipes.filter((r: any) => !isDessert(r));
+
+  // Heart-healthy-only mode: keep just the recipes assessed as heart-healthy.
+  // Unlike desserts, this is a hard requirement — if none qualify, say so
+  // rather than silently filling with non-qualifying dishes.
+  if (heartOnly) {
+    const hh = pool.filter((r: any) => r.heart_healthy === true);
+    if (hh.length === 0) {
+      return res.status(200).json({
+        picks: [],
+        note: 'No heart-healthy recipes available to fill these days. Tap “Analyze all” on the Recipes page first, or add some heart-healthy recipes.',
+      });
+    }
+    pool = hh;
+  }
 
   const n = Math.min(days.length, pool.length);
   const slugs = await chooseSlugs(pool, n, planned);
