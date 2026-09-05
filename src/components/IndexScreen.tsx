@@ -6,6 +6,7 @@ import Heart from './Heart';
 import { FAVORITES_ENABLED } from '../lib/flags';
 import { shareRecipe } from '../lib/share';
 import ShareIcon from './ShareIcon';
+import HeartHealthyIcon from './HeartHealthyIcon';
 
 const CAT_LIMIT = 16; // categories shown in the sidebar before "show all"
 
@@ -46,6 +47,11 @@ function RecipeCard({ r, onFav }: { r: RecipeSummary; onFav: (slug: string) => v
           ))}
         </div>
       )}
+      {r.heartHealthy ? (
+        <div className="rcard-hh" title="Heart-healthy — meets Mediterranean / AHA guidelines">
+          <HeartHealthyIcon /> Heart-healthy
+        </div>
+      ) : null}
       <div className="rcard-meta">
         {r.calories ? <span className="rcard-cal">≈ {r.calories.toLocaleString()} cal / serving</span> : null}
         {r.cookedCount ? (
@@ -63,24 +69,30 @@ export default function IndexScreen() {
   const [query, setQuery] = useState('');
   const [activeTag, setActiveTag] = useState<string | null>(null); // stores a tag key
   const [showFavs, setShowFavs] = useState(false);
+  const [showHeart, setShowHeart] = useState(false);
   const [showAllCats, setShowAllCats] = useState(false);
   const [backfill, setBackfill] = useState({ running: false, done: 0, total: 0, msg: '' });
 
   const favCount = useMemo(() => recipes.filter((r) => r.favorite).length, [recipes]);
-  // Recipes missing a nutrition estimate, a cost estimate, or both — one tap
-  // prices and nutrition-labels the whole library.
+  const heartCount = useMemo(() => recipes.filter((r) => r.heartHealthy === true).length, [recipes]);
+  // Recipes missing a nutrition estimate, a cost estimate, or a heart-healthy
+  // check — one tap analyzes the whole library. (The nutrition endpoint also
+  // does the heart-healthy assessment, so a recipe missing only the heart check
+  // is handled by calling /api/nutrition.)
   const missing = useMemo(
-    () => recipes.filter((r) => !r.hasNutrition || !r.hasCost),
+    () => recipes.filter((r) => !r.hasNutrition || !r.hasCost || r.heartHealthy == null),
     [recipes],
   );
 
-  // Fill in nutrition and/or cost for every recipe that's missing either, one
-  // recipe after another with a live count. Stops early if an estimate can't be
-  // saved (the column isn't there yet), and refreshes so the bar hides when done.
+  // Fill in nutrition, cost, and the heart-healthy verdict for every recipe
+  // that's missing any, one after another with a live count. Stops early if it
+  // can't be saved (columns not there yet), and refreshes when done.
   const backfillEstimates = async () => {
     const todo = missing.map((r) => ({
       slug: r.slug,
-      needNutrition: !r.hasNutrition,
+      // The nutrition endpoint estimates nutrition AND assesses heart-healthy,
+      // so call it when either is missing.
+      needNutrition: !r.hasNutrition || r.heartHealthy == null,
       needCost: !r.hasCost,
     }));
     if (todo.length === 0 || backfill.running) return;
@@ -123,7 +135,7 @@ export default function IndexScreen() {
       ...b,
       running: false,
       msg: unsaved
-        ? 'Estimates could not be saved — run the database update (nutrition + cost columns) first.'
+        ? 'Estimates could not be saved — run the database update (nutrition + cost + heart columns) first.'
         : '',
     }));
   };
@@ -156,6 +168,7 @@ export default function IndexScreen() {
     const q = query.trim().toLowerCase();
     return recipes.filter((r) => {
       if (showFavs && !r.favorite) return false;
+      if (showHeart && r.heartHealthy !== true) return false;
       const tags = effectiveTags(r.tags, r.eyebrow);
       if (activeTag && !tags.some((t) => tagKey(t) === activeTag)) return false;
       if (!q) return true;
@@ -166,20 +179,28 @@ export default function IndexScreen() {
         tags.some((t) => t.toLowerCase().includes(q))
       );
     });
-  }, [recipes, query, activeTag, showFavs]);
+  }, [recipes, query, activeTag, showFavs, showHeart]);
 
-  // Favorites and a category are mutually exclusive filters — picking one clears
-  // the other so the active header stays unambiguous.
+  // Favorites, heart-healthy, and a category are mutually exclusive filters —
+  // picking one clears the others so the active header stays unambiguous.
   const pickAll = () => {
     setActiveTag(null);
     setShowFavs(false);
+    setShowHeart(false);
   };
   const pickFavs = () => {
     setActiveTag(null);
+    setShowHeart(false);
     setShowFavs(true);
+  };
+  const pickHeart = () => {
+    setActiveTag(null);
+    setShowFavs(false);
+    setShowHeart(true);
   };
   const pickCat = (key: string) => {
     setShowFavs(false);
+    setShowHeart(false);
     setActiveTag(activeTag === key ? null : key);
   };
 
@@ -199,12 +220,12 @@ export default function IndexScreen() {
       </div>
 
       <div className="index-layout">
-        {(categories.length > 0 || favCount > 0) && (
+        {(categories.length > 0 || favCount > 0 || heartCount > 0) && (
           <aside className="index-sidebar">
             <h2>Browse</h2>
             <button
               className="cat"
-              aria-pressed={!showFavs && activeTag === null}
+              aria-pressed={!showFavs && !showHeart && activeTag === null}
               onClick={pickAll}
             >
               <span>All recipes</span>
@@ -216,11 +237,17 @@ export default function IndexScreen() {
                 <span className="count">{favCount}</span>
               </button>
             )}
+            {heartCount > 0 && (
+              <button className="cat cat-heart" aria-pressed={showHeart} onClick={pickHeart}>
+                <span>♥ Heart-healthy</span>
+                <span className="count">{heartCount}</span>
+              </button>
+            )}
             {shownCats.map((c) => (
               <button
                 key={c.key}
                 className="cat"
-                aria-pressed={!showFavs && activeTag === c.key}
+                aria-pressed={!showFavs && !showHeart && activeTag === c.key}
                 onClick={() => pickCat(c.key)}
               >
                 <span>{c.label}</span>
@@ -240,29 +267,33 @@ export default function IndexScreen() {
             <div className="nutri-backfill">
               {backfill.running ? (
                 <span>
-                  Estimating nutrition &amp; cost… {backfill.done}/{backfill.total}
+                  Analyzing recipes (nutrition, cost, heart-healthy)… {backfill.done}/{backfill.total}
                 </span>
               ) : backfill.msg ? (
                 <span className="nb-msg">{backfill.msg}</span>
               ) : (
                 <>
                   <span>
-                    {missing.length} recipe{missing.length === 1 ? '' : 's'} missing nutrition or cost
-                    estimates.
+                    {missing.length} recipe{missing.length === 1 ? '' : 's'} not fully analyzed (nutrition,
+                    cost, heart-healthy).
                   </span>{' '}
                   <button className="linkish" onClick={backfillEstimates}>
-                    Estimate all
+                    Analyze all
                   </button>
                 </>
               )}
             </div>
           )}
 
-          {(activeLabel || showFavs) && (
+          {(activeLabel || showFavs || showHeart) && (
             <p className="index-active">
               {showFavs ? (
                 <>
                   {visible.length} <b>♥ favorites</b>
+                </>
+              ) : showHeart ? (
+                <>
+                  {visible.length} <b>♥ heart-healthy</b>
                 </>
               ) : (
                 <>

@@ -81,6 +81,7 @@ export type RecipeSummary = {
   cost?: number | null;
   cookedCount?: number;
   lastCookedOn?: string | null;
+  heartHealthy?: boolean | null; // true/false = assessed; null/undefined = not yet
 };
 
 /* ------------------------------------------------------------------ */

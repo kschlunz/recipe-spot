@@ -2349,3 +2349,58 @@ tr.hot td.ing {
   padding: 1px 5px;
   border-radius: 3px;
 }
+
+/* ── Heart-healthy label (Mediterranean / AHA) ───────────────────────── */
+/* Distinct from the turmeric favorite heart: kale green, with a pulse-heart. */
+.rcard-hh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 3px 9px 3px 7px;
+  border: 1.5px solid var(--kale);
+  border-radius: 999px;
+  background: var(--kale-wash);
+  color: var(--kale);
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.rcard-hh svg {
+  color: var(--kale);
+}
+.cat-heart[aria-pressed='true'] {
+  border-left-color: var(--kale);
+  color: var(--kale);
+  font-weight: 700;
+}
+.cat-heart[aria-pressed='true'] .count {
+  color: var(--kale);
+}
+.rp-hh {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border: 1.5px solid var(--kale);
+  background: var(--kale-wash);
+  color: var(--kale);
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 6px;
+  width: fit-content;
+  max-width: 100%;
+}
+.rp-hh svg {
+  color: var(--kale);
+  flex: none;
+}
+.rp-hh-why {
+  font-weight: 400;
+  color: var(--ink-soft);
+  font-family: 'Instrument Sans', system-ui, sans-serif;
+  font-size: 13px;
+}

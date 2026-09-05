@@ -11,6 +11,7 @@ import { fileToResizedBase64, imageFromClipboard } from '../lib/image';
 import { shareRecipe, copyText } from '../lib/share';
 import { ingredientsToText } from '../lib/ingredients';
 import ShareIcon from './ShareIcon';
+import HeartHealthyIcon from './HeartHealthyIcon';
 import { STEW, type Recipe } from '../data/recipe';
 import { DAYS, type Day } from '../hooks/useMealPlan';
 
@@ -167,6 +168,8 @@ export default function RecipePage({ slug }: { slug: string }) {
     setCost,
     cookedCount,
     lastCookedOn,
+    heartHealthy,
+    heartReason,
     loading,
     error,
     refresh,
@@ -433,6 +436,12 @@ export default function RecipePage({ slug }: { slug: string }) {
                 )}
             </div>
           </div>
+          {heartHealthy && (
+            <p className="rp-hh" title="Meets Mediterranean / AHA heart-healthy guidelines">
+              <HeartHealthyIcon size={16} /> Heart-healthy
+              {heartReason ? <span className="rp-hh-why"> · {heartReason}</span> : null}
+            </p>
+          )}
           {cookedCount > 0 && (
             <p className="rp-made" title="From your cooking log">
               🍳 Made {cookedCount}×{lastCookedOn ? ` · last on ${fmtMade(lastCookedOn)}` : ''}

@@ -29,6 +29,11 @@ alter table public.recipes add column if not exists nutrition jsonb;
 -- Estimated total grocery cost to make the recipe, in USD.
 alter table public.recipes add column if not exists cost numeric;
 
+-- Heart-healthy verdict (Mediterranean diet / AHA guidelines): true, false, or
+-- null (not assessed yet). heart_reason holds a one-line explanation.
+alter table public.recipes add column if not exists heart_healthy boolean;
+alter table public.recipes add column if not exists heart_reason text;
+
 -- Public storage bucket for dish photos. Uploads happen through the serverless
 -- functions with the service-role key; reads are public.
 insert into storage.buckets (id, name, public)
