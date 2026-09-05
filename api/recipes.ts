@@ -81,7 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // back to the base set so recipe loading never breaks.
       let { data, error } = await supabase
         .from('recipes')
-        .select(`${BASE}, favorite, nutrition, cost`)
+        .select(`${BASE}, favorite, nutrition, cost, heart_healthy, heart_reason`)
         .eq('slug', slug)
         .maybeSingle();
       if (error) {
@@ -103,7 +103,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let error: any = null;
     ({ data, error } = await supabase
       .from('recipes')
-      .select(`${LIST}, favorite, nutrition, cost`)
+      .select(`${LIST}, favorite, nutrition, cost, heart_healthy`)
       .order('created_at', { ascending: false }));
     if (error) {
       ({ data, error } = await supabase.from('recipes').select(LIST).order('created_at', { ascending: false }));
@@ -125,6 +125,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       cost: Number(row.cost) || null,
       cookedCount: cooked.get(row.slug)?.count ?? 0,
       lastCookedOn: cooked.get(row.slug)?.last ?? null,
+      heartHealthy: row.heart_healthy ?? null,
     }));
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({ total: recipes.length, recipes });

@@ -1,10 +1,17 @@
 // api/nutrition.ts — estimate per-serving nutrition for a recipe from its
-// ingredient list, using Claude, and store it on the recipe row.
+// ingredient list, AND assess whether it's heart-healthy (Mediterranean / AHA
+// guidelines), using Claude, and store both on the recipe row.
 //
-//   POST /api/nutrition  { slug }  → { nutrition: { calories, protein, carbs, fat } }
+//   POST /api/nutrition  { slug }
+//     → { nutrition: {calories,protein,carbs,fat}, heartHealthy: boolean,
+//         heartReason: string, saved: boolean }
 //
-// Estimates only — labeled as such in the UI. Numbers are per single serving,
-// so they don't change with the recipe's serving multiplier.
+// Nutrition numbers are per single serving. Heart-healthy is a yes/no verdict
+// against the Mediterranean diet (Mayo Clinic) and the AHA diet & lifestyle
+// recommendations: plant-forward, olive oil, fish/lean protein, whole grains,
+// legumes, nuts; low in saturated/trans fat, sodium, red/processed meat,
+// refined carbs, and added sugar. Both are folded into this one endpoint so the
+// project stays under the serverless-function limit.
 
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -48,15 +55,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const supabase = client(res);
   if (!supabase) return;
 
-  const { data: row, error } = await supabase
+  // Pull existing nutrition too (may have come from the source page) so we don't
+  // overwrite it with an estimate. Fall back if the column isn't there yet.
+  let row: any = null;
+  let error: any = null;
+  ({ data: row, error } = await supabase
     .from('recipes')
-    .select('slug, title, data')
+    .select('slug, title, data, nutrition')
     .eq('slug', slug)
-    .maybeSingle();
+    .maybeSingle());
+  if (error) {
+    ({ data: row, error } = await supabase
+      .from('recipes')
+      .select('slug, title, data')
+      .eq('slug', slug)
+      .maybeSingle());
+  }
   if (error) return res.status(500).json({ error: error.message });
   if (!row) return res.status(404).json({ error: 'Recipe not found' });
 
-  const recipe = (row as any).data ?? {};
+  const recipe = row.data ?? {};
+  const existingNutrition = row.nutrition && typeof row.nutrition === 'object' ? row.nutrition : null;
   const serves = Number(recipe.serves) || 4;
   const lines = ((recipe.ingredients ?? []) as any[])
     .map((g) => {
@@ -68,13 +87,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const msg = await anthropic.messages.create({
       model: MODEL,
-      max_tokens: 400,
+      max_tokens: 500,
       system:
-        'You estimate recipe nutrition. Given a full ingredient list and how many servings the recipe ' +
-        'makes, estimate the nutrition PER SERVING using standard food composition values. Divide totals ' +
-        'by the number of servings. Respond with ONLY a JSON object of numbers: ' +
-        '{"calories": <kcal>, "protein": <g>, "carbs": <g>, "fat": <g>}. Integers, per one serving, no ' +
-        'ranges, no text, no units in the values.',
+        'You are a registered-dietitian assistant. Given a recipe (ingredient list + servings) do TWO things.\n\n' +
+        '1) Estimate nutrition PER SERVING using standard food composition values (divide totals by servings).\n\n' +
+        '2) Decide if the dish is HEART-HEALTHY by the Mediterranean diet (Mayo Clinic) and the American Heart ' +
+        'Association diet & lifestyle recommendations. Heart-healthy dishes are plant-forward and rich in ' +
+        'vegetables, fruits, whole grains, legumes, nuts/seeds; use healthy fats (olive oil) and lean proteins ' +
+        'especially fish/poultry; and are LOW in saturated fat, trans fat, sodium, added sugar, refined grains, ' +
+        'and red or processed meat. Mark heart_healthy false for dishes built on red/processed meat, lots of ' +
+        'butter/cream/cheese, deep-frying, refined-carb or high-added-sugar bases, or desserts/sweets. Judge the ' +
+        'dish as a whole; small amounts of cheese or butter are fine in an otherwise plant-forward, olive-oil dish.\n\n' +
+        'Respond with ONLY a JSON object: {"calories":<int kcal>,"protein":<int g>,"carbs":<int g>,"fat":<int g>,' +
+        '"heart_healthy":<true|false>,"heart_reason":"<one short sentence, max ~15 words>"}. Per one serving, ' +
+        'integers, no ranges, no units in numeric values, no extra text.',
       messages: [{ role: 'user', content: `Servings: ${serves}\n\nIngredients:\n${lines}` }],
     });
     const text = msg.content
@@ -83,25 +109,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .join('')
       .replace(/```json|```/g, '')
       .trim();
-    // Pull out just the JSON object, in case the model adds any stray text.
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) throw new Error('empty response from the model');
     const parsed = JSON.parse(match[0]);
-    const nutrition = {
-      calories: num(parsed.calories),
-      protein: num(parsed.protein),
-      carbs: num(parsed.carbs),
-      fat: num(parsed.fat),
-      source: 'estimated' as const,
-    };
 
-    // Persist it. If the `nutrition` column doesn't exist yet (schema not run),
-    // don't fail — still return the estimate so the page can show it this
-    // session, and flag that it wasn't saved.
-    const { error: upErr } = await supabase.from('recipes').update({ nutrition }).eq('slug', slug);
-    const saved = !upErr;
+    // Keep source-provided nutrition if we already have it; else use the estimate.
+    const nutrition =
+      existingNutrition ?? {
+        calories: num(parsed.calories),
+        protein: num(parsed.protein),
+        carbs: num(parsed.carbs),
+        fat: num(parsed.fat),
+        source: 'estimated' as const,
+      };
+    const heartHealthy = parsed.heart_healthy === true;
+    const heartReason = typeof parsed.heart_reason === 'string' ? parsed.heart_reason.trim().slice(0, 200) : '';
 
-    return res.status(200).json({ nutrition, saved });
+    // Persist. Save nutrition only if it was missing (don't clobber the source's
+    // own numbers). Save the heart verdict separately so a missing nutrition
+    // column can't stop the heart columns saving, and vice versa. If a column
+    // isn't there yet (schema not run), just report saved:false.
+    let nutritionSaved = true;
+    if (!existingNutrition) {
+      const { error: nErr } = await supabase.from('recipes').update({ nutrition }).eq('slug', slug);
+      nutritionSaved = !nErr;
+    }
+    const { error: hErr } = await supabase
+      .from('recipes')
+      .update({ heart_healthy: heartHealthy, heart_reason: heartReason })
+      .eq('slug', slug);
+    const saved = nutritionSaved && !hErr;
+
+    return res.status(200).json({ nutrition, heartHealthy, heartReason, saved });
   } catch (e) {
     return res.status(502).json({ error: `Could not estimate nutrition: ${(e as Error).message}` });
   }

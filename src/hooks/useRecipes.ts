@@ -63,6 +63,8 @@ export function useRecipe(slug: string) {
   const [cost, setCost] = useState<number | null>(null);
   const [cookedCount, setCookedCount] = useState(0);
   const [lastCookedOn, setLastCookedOn] = useState<string | null>(null);
+  const [heartHealthy, setHeartHealthy] = useState<boolean | null>(null);
+  const [heartReason, setHeartReason] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,6 +86,8 @@ export function useRecipe(slug: string) {
           setCost(json.recipe?.cost != null ? Number(json.recipe.cost) : null);
           setCookedCount(Number(json.recipe?.cookedCount) || 0);
           setLastCookedOn(json.recipe?.lastCookedOn ?? null);
+          setHeartHealthy(json.recipe?.heart_healthy ?? null);
+          setHeartReason(json.recipe?.heart_reason ?? '');
         }
       } catch (e) {
         if (alive()) setError((e as Error).message);
@@ -104,6 +108,8 @@ export function useRecipe(slug: string) {
     setCost(null);
     setCookedCount(0);
     setLastCookedOn(null);
+    setHeartHealthy(null);
+    setHeartReason('');
     load(() => on);
     return () => {
       on = false;
@@ -134,6 +140,8 @@ export function useRecipe(slug: string) {
     setCost,
     cookedCount,
     lastCookedOn,
+    heartHealthy,
+    heartReason,
     loading,
     error,
     refresh,

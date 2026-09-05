@@ -184,17 +184,16 @@ export default function ImportScreen() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ slug: json.slug }),
       }).catch(() => {});
-      // When the source didn't provide nutrition, estimate it now and WAIT, so
-      // the recipe opens with nutrition already filled in rather than showing a
-      // "Calculate nutrition" button.
-      if (!sourceNutrition) {
-        setStatus('Estimating nutrition…');
-        await fetch('/api/nutrition', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ slug: json.slug }),
-        }).catch(() => {});
-      }
+      // Always run the nutrition endpoint and WAIT: it estimates nutrition when
+      // the source didn't provide any (keeping the source's own numbers if it
+      // did) AND assesses whether the recipe is heart-healthy — so the recipe
+      // opens already labeled instead of showing a "Calculate" button.
+      setStatus(sourceNutrition ? 'Checking heart-healthy…' : 'Estimating nutrition & heart-healthy…');
+      await fetch('/api/nutrition', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ slug: json.slug }),
+      }).catch(() => {});
       window.location.hash = `#/r/${json.slug}`;
     } catch (e) {
       setError((e as Error).message);
