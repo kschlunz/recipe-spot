@@ -7,6 +7,7 @@ import ShoppingScreen from './components/ShoppingScreen';
 import FridgeScreen from './components/FridgeScreen';
 import CookedScreen from './components/CookedScreen';
 import TripScreen from './components/TripScreen';
+import HeartHealthyGuide from './components/HeartHealthyGuide';
 
 type Route =
   | { name: 'index' }
@@ -16,6 +17,7 @@ type Route =
   | { name: 'fridge' }
   | { name: 'cooked' }
   | { name: 'trip' }
+  | { name: 'heart' }
   | { name: 'recipe'; slug: string };
 
 function parseRoute(): Route {
@@ -26,6 +28,7 @@ function parseRoute(): Route {
   if (hash === '/fridge') return { name: 'fridge' };
   if (hash === '/cooked') return { name: 'cooked' };
   if (hash === '/trip') return { name: 'trip' };
+  if (hash === '/heart-healthy') return { name: 'heart' };
   const m = hash.match(/^\/r\/([^/]+)/);
   if (m) return { name: 'recipe', slug: decodeURIComponent(m[1]) };
   return { name: 'index' };
@@ -84,6 +87,7 @@ export default function App() {
       {route.name === 'fridge' && <FridgeScreen />}
       {route.name === 'cooked' && <CookedScreen />}
       {route.name === 'trip' && <TripScreen />}
+      {route.name === 'heart' && <HeartHealthyGuide />}
       {route.name === 'recipe' && <RecipePage slug={route.slug} />}
     </>
   );

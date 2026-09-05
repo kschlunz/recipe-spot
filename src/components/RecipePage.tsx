@@ -437,10 +437,14 @@ export default function RecipePage({ slug }: { slug: string }) {
             </div>
           </div>
           {heartHealthy && (
-            <p className="rp-hh" title="Meets Mediterranean / AHA heart-healthy guidelines">
+            <a
+              className="rp-hh"
+              href="#/heart-healthy"
+              title="Meets Mediterranean / AHA heart-healthy guidelines — tap to read them"
+            >
               <HeartHealthyIcon size={16} /> Heart-healthy
               {heartReason ? <span className="rp-hh-why"> · {heartReason}</span> : null}
-            </p>
+            </a>
           )}
           {cookedCount > 0 && (
             <p className="rp-made" title="From your cooking log">
