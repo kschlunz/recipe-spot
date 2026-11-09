@@ -165,17 +165,6 @@ create table if not exists public.shopping_checked (
 );
 alter table public.shopping_checked enable row level security;
 
--- Saved Walmart picks: which Walmart product the household buys for an
--- ingredient, keyed by the cleaned ingredient name. Lets the shopping list send
--- everything with a saved pick to a Walmart cart in one tap.
-create table if not exists public.walmart_picks (
-  item_key   text primary key,
-  item_id    text not null,   -- Walmart item ID (the number ending a product URL)
-  label      text,            -- product name, when the pasted link carried one
-  updated_at timestamptz default now()
-);
-alter table public.walmart_picks enable row level security;
-
 -- Cooking log: a running history of meals actually cooked, checked off from the
 -- weekly plan. Kept deliberately separate from favorites, and persistent — it
 -- survives clearing the week and even deleting the recipe (title is snapshotted,

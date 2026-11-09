@@ -6,9 +6,8 @@
 // to whatever store/pickup the shopper already has selected.
 //
 // Walmart does document a cart-prefill link, but it takes Walmart item IDs
-// rather than names. So the household saves a "pick" per ingredient (the
-// product they actually buy, pasted once as a Walmart link), and everything
-// with a pick goes to the cart in one tap via walmartCartUrl below.
+// rather than names — see walmartCartUrl below. Nothing calls it yet; it's here
+// for when items carry a matched Walmart product.
 
 // Prep and usage notes that trail an ingredient name after a comma. They only
 // muddy a product search, so those segments are dropped.
@@ -34,20 +33,12 @@ export function walmartSearchUrl(name: string): string {
 }
 
 // Walmart's documented add-to-cart link: items are "<itemId>_<quantity>",
-// comma-separated, one of each here (package counts don't follow from recipe
-// amounts — adjust in the cart). If any item can't be added, Walmart shows an
-// error and lands on its home page.
-export function walmartCartUrl(itemIds: string[]): string {
-  const list = [...new Set(itemIds.filter((id) => /^\d+$/.test(id)))].map((id) => `${id}_1`).join(',');
+// comma-separated. If any item can't be added, Walmart shows an error and
+// lands on its home page, so only pass IDs known to be good.
+export function walmartCartUrl(items: { itemId: string; quantity?: number }[]): string {
+  const list = items
+    .filter((it) => /^\d+$/.test(it.itemId))
+    .map((it) => `${it.itemId}_${Math.max(1, Math.round(it.quantity ?? 1))}`)
+    .join(',');
   return `https://www.walmart.com/sc/cart/addToCart?items=${list}`;
-}
-
-// The key a saved pick is stored under: the cleaned name, so "yellow onion" and
-// "yellow onion, finely chopped" share one pick across recipes.
-export function walmartKey(name: string): string {
-  return (walmartQuery(name) || name.trim()).toLowerCase();
-}
-
-export function walmartProductUrl(itemId: string): string {
-  return `https://www.walmart.com/ip/${encodeURIComponent(itemId)}`;
 }
