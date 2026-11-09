@@ -13,6 +13,10 @@ const CAT_LIMIT = 16; // categories shown in the sidebar before "show all"
 function RecipeCard({ r, onFav }: { r: RecipeSummary; onFav: (slug: string) => void }) {
   const tags = effectiveTags(r.tags, r.eyebrow);
   const [copied, setCopied] = useState(false);
+  // The dish photo, when the recipe has one and it loads. A dead link falls
+  // back to the plain text card rather than a broken-image box.
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const showPhoto = !!r.photoUrl && !photoFailed;
 
   // Share without leaving the list. Stop the click from following the card link.
   const onShare = async (e: React.MouseEvent) => {
@@ -26,7 +30,17 @@ function RecipeCard({ r, onFav }: { r: RecipeSummary; onFav: (slug: string) => v
   };
 
   return (
-    <a className="rcard" href={`#/r/${r.slug}`}>
+    <a className={'rcard' + (showPhoto ? ' has-photo' : '')} href={`#/r/${r.slug}`}>
+      {showPhoto && (
+        <img
+          className="rcard-photo"
+          src={r.photoUrl ?? undefined}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={() => setPhotoFailed(true)}
+        />
+      )}
       <button
         type="button"
         className={'rcard-share' + (FAVORITES_ENABLED ? '' : ' solo') + (copied ? ' copied' : '')}
