@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { frac } from '../lib/recipeGrid';
 import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
+import { walmartSearchUrl } from '../lib/walmart';
 
 type Amount = { q: number; u: string };
 type Item = {
@@ -25,6 +26,17 @@ const lineOf = (it: Item) => {
   return head + (it.note ? ` — ${it.note}` : '');
 };
 
+// Whether the Walmart links are showing — remembered per device. Storage can be
+// unavailable (private mode), so both sides are best-effort.
+const WALMART_KEY = 'shop.walmart';
+const readWalmart = () => {
+  try {
+    return localStorage.getItem(WALMART_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
 export default function ShoppingScreen() {
   const [items, setItems] = useState<Item[]>([]);
   const [spices, setSpices] = useState<Item[]>([]);
@@ -34,6 +46,17 @@ export default function ShoppingScreen() {
   const [error, setError] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<string>>(() => new Set());
   const [copied, setCopied] = useState(false);
+  const [walmart, setWalmart] = useState(readWalmart);
+
+  const toggleWalmart = () => {
+    const next = !walmart;
+    setWalmart(next);
+    try {
+      localStorage.setItem(WALMART_KEY, next ? '1' : '0');
+    } catch {
+      /* not remembered — still works for this visit */
+    }
+  };
 
   // Pull the list and the shared checkmarks together. Silent (no spinner) so a
   // focus-refresh doesn't flash "Building your list…" every time you return.
@@ -135,6 +158,18 @@ export default function ShoppingScreen() {
           </span>
           {it.sources.length > 0 && <span className="shop-src">{it.sources.join(' · ')}</span>}
         </span>
+        {walmart && !on && (
+          <a
+            className="shop-walmart"
+            href={walmartSearchUrl(it.name)}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`Find ${it.name} at Walmart`}
+          >
+            Walmart ↗
+          </a>
+        )}
       </li>
     );
   };
@@ -148,7 +183,7 @@ export default function ShoppingScreen() {
       <div className="index-head">
         <h1>Shopping list</h1>
         {allItems.length > 0 && (
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
             <span
               style={{
                 fontFamily: "'Space Mono', monospace",
@@ -160,6 +195,9 @@ export default function ShoppingScreen() {
               {remaining} to buy
             </span>
             <button onClick={copyList}>{copied ? 'Copied ✓' : 'Copy list'}</button>
+            <button onClick={toggleWalmart} aria-pressed={walmart}>
+              {walmart ? 'Hide Walmart' : 'Shop Walmart'}
+            </button>
             {checked.size > 0 && <button onClick={uncheckAll}>Uncheck all</button>}
           </div>
         )}
@@ -187,6 +225,13 @@ export default function ShoppingScreen() {
             what's left. Pasting into Apple Notes? Paste, then select all and tap the checklist button to
             make them tickable.
           </p>
+          {walmart && (
+            <p className="shop-tip">
+              <b>Walmart pickup:</b> tap <b>Walmart ↗</b> on an item to open it in Walmart, add the one
+              you want to your cart, then come back and tick it off. When the list is clear, check out in
+              Walmart and pick your pickup time.
+            </p>
+          )}
           {items.length > 0 && <ul className="shop-list">{items.map(renderItem)}</ul>}
 
           {spices.length > 0 && (
