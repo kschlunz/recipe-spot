@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { frac } from '../lib/recipeGrid';
 import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
+import { pickupLines } from '../lib/pickup';
 import { walmartSearchUrl } from '../lib/walmart';
 
 type Amount = { q: number; u: string };
@@ -46,6 +47,8 @@ export default function ShoppingScreen() {
   const [error, setError] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<string>>(() => new Set());
   const [copied, setCopied] = useState(false);
+  // How many lines the last "Copy for pickup" put on the clipboard (0 = idle).
+  const [pickupCopied, setPickupCopied] = useState(0);
   const [walmart, setWalmart] = useState(readWalmart);
 
   const toggleWalmart = () => {
@@ -140,6 +143,19 @@ export default function ShoppingScreen() {
     );
   };
 
+  // The unticked items in store terms, for pasting into a grocery pickup app.
+  const copyForPickup = () => {
+    const lines = pickupLines(allItems.filter((it) => !checked.has(keyOf(it))));
+    if (lines.length === 0) return;
+    navigator.clipboard.writeText(lines.join('\n')).then(
+      () => {
+        setPickupCopied(lines.length);
+        setTimeout(() => setPickupCopied(0), 2400);
+      },
+      () => {},
+    );
+  };
+
   const renderItem = (it: Item) => {
     const k = keyOf(it);
     const on = checked.has(k);
@@ -195,6 +211,9 @@ export default function ShoppingScreen() {
               {remaining} to buy
             </span>
             <button onClick={copyList}>{copied ? 'Copied ✓' : 'Copy list'}</button>
+            <button onClick={copyForPickup} disabled={remaining === 0}>
+              {pickupCopied ? `Copied ${pickupCopied} item${pickupCopied === 1 ? '' : 's'} ✓` : 'Copy for pickup'}
+            </button>
             <button onClick={toggleWalmart} aria-pressed={walmart}>
               {walmart ? 'Hide Walmart' : 'Shop Walmart'}
             </button>
@@ -223,7 +242,9 @@ export default function ShoppingScreen() {
             "leftovers" and "eat out" are skipped. Tick off what you already have — checkmarks are
             <b> shared</b>, so you both see the same list while shopping. <b>Copy list</b> copies only
             what's left. Pasting into Apple Notes? Paste, then select all and tap the checklist button to
-            make them tickable.
+            make them tickable. <b>Copy for pickup</b> copies what's left as a plain list for a grocery
+            app — one item per line, no prep notes — to paste into Walmart's Sparky or Instacart and
+            build a pickup order.
           </p>
           {walmart && (
             <p className="shop-tip">
