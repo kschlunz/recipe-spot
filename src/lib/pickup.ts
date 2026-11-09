@@ -24,6 +24,12 @@ export function storeName(name: string): string {
     .trim();
 }
 
+// The identity of an item once prep notes are gone: what merges rows on the
+// pickup list, and what a pantry staple is stored under.
+export function storeKey(name: string): string {
+  return (storeName(name) || name.trim()).toLowerCase();
+}
+
 type Amount = { q: number; u: string };
 export type PickupItem = { name: string; amounts: Amount[] };
 
@@ -46,7 +52,7 @@ export function pickupLines(items: PickupItem[]): string[] {
   for (const it of items) {
     const name = storeName(it.name) || it.name.trim();
     if (!name) continue;
-    const key = name.toLowerCase();
+    const key = storeKey(it.name);
     let grp = groups.get(key);
     if (!grp) {
       grp = { name, units: new Map() };

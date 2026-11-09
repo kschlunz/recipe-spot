@@ -165,6 +165,15 @@ create table if not exists public.shopping_checked (
 );
 alter table public.shopping_checked enable row level security;
 
+-- Pantry staples: things the household always has on hand (salt, olive oil),
+-- by cleaned, lowercased item name. The shopping list leaves these off.
+create table if not exists public.pantry_staples (
+  item_key   text primary key,
+  name       text not null,
+  created_at timestamptz default now()
+);
+alter table public.pantry_staples enable row level security;
+
 -- Cooking log: a running history of meals actually cooked, checked off from the
 -- weekly plan. Kept deliberately separate from favorites, and persistent — it
 -- survives clearing the week and even deleting the recipe (title is snapshotted,

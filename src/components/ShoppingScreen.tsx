@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { frac } from '../lib/recipeGrid';
 import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
-import { pickupLines } from '../lib/pickup';
+import { useStaples } from '../hooks/useStaples';
+import { pickupLines, storeKey, storeName } from '../lib/pickup';
 import { walmartSearchUrl } from '../lib/walmart';
 
 type Amount = { q: number; u: string };
@@ -50,6 +51,17 @@ export default function ShoppingScreen() {
   // How many lines the last "Copy for pickup" put on the clipboard (0 = idle).
   const [pickupCopied, setPickupCopied] = useState(0);
   const [walmart, setWalmart] = useState(readWalmart);
+  // Pantry staples: things the household always has, left off the list. While
+  // "setting staples", tapping a row marks it a staple instead of ticking it.
+  const {
+    staples,
+    needsSetup: staplesNeedSetup,
+    error: stapleError,
+    reload: reloadStaples,
+    add: addStaple,
+    remove: removeStaple,
+  } = useStaples();
+  const [settingStaples, setSettingStaples] = useState(false);
 
   const toggleWalmart = () => {
     const next = !walmart;
@@ -91,13 +103,18 @@ export default function ShoppingScreen() {
   useEffect(() => {
     load();
   }, [load]);
-  useRefreshOnFocus(() => load(true));
+  useRefreshOnFocus(() => {
+    load(true);
+    reloadStaples();
+  });
 
   const allItems = useMemo(() => [...items, ...spices, ...noteItems], [items, spices, noteItems]);
-  const remaining = useMemo(
-    () => allItems.filter((it) => !checked.has(keyOf(it))).length,
-    [allItems, checked],
-  );
+  const stapleKeys = useMemo(() => new Set(staples.map((s) => s.key)), [staples]);
+  const isStaple = useCallback((it: Item) => stapleKeys.has(storeKey(it.name)), [stapleKeys]);
+  // What actually needs buying: everything planned, minus the staples.
+  const toBuy = useMemo(() => allItems.filter((it) => !isStaple(it)), [allItems, isStaple]);
+  const skipped = allItems.length - toBuy.length;
+  const remaining = useMemo(() => toBuy.filter((it) => !checked.has(keyOf(it))).length, [toBuy, checked]);
 
   // Toggle optimistically, then persist to the shared list. On failure, reload
   // so we don't drift from what the other phone sees.
@@ -130,7 +147,7 @@ export default function ShoppingScreen() {
   };
 
   const copyList = () => {
-    const text = allItems
+    const text = toBuy
       .filter((it) => !checked.has(keyOf(it)))
       .map(lineOf)
       .join('\n');
@@ -145,7 +162,7 @@ export default function ShoppingScreen() {
 
   // The unticked items in store terms, for pasting into a grocery pickup app.
   const copyForPickup = () => {
-    const lines = pickupLines(allItems.filter((it) => !checked.has(keyOf(it))));
+    const lines = pickupLines(toBuy.filter((it) => !checked.has(keyOf(it))));
     if (lines.length === 0) return;
     navigator.clipboard.writeText(lines.join('\n')).then(
       () => {
@@ -156,12 +173,29 @@ export default function ShoppingScreen() {
     );
   };
 
+  const toggleStaple = (it: Item) => {
+    if (staplesNeedSetup) return;
+    const sk = storeKey(it.name);
+    if (stapleKeys.has(sk)) removeStaple(sk);
+    else addStaple(sk, storeName(it.name) || it.name.trim());
+  };
+
+  // Staples are left out of every section, except while setting them — then
+  // every row shows, so any of them can be marked or unmarked.
+  const shown = (list: Item[]) => (settingStaples ? list : list.filter((it) => !isStaple(it)));
+
   const renderItem = (it: Item) => {
     const k = keyOf(it);
-    const on = checked.has(k);
     const m = measured(it);
+    const staple = settingStaples && isStaple(it);
+    const on = settingStaples ? staple : checked.has(k);
+    const rowClass = settingStaples ? (staple ? ' staple' : '') : on ? ' off' : '';
     return (
-      <li key={k} className={'shop-item' + (on ? ' off' : '')} onClick={() => toggle(it)}>
+      <li
+        key={k}
+        className={'shop-item' + rowClass}
+        onClick={() => (settingStaples ? toggleStaple(it) : toggle(it))}
+      >
         <span className={'shop-check' + (on ? ' on' : '')} aria-hidden>
           {on ? '✓' : ''}
         </span>
@@ -174,7 +208,8 @@ export default function ShoppingScreen() {
           </span>
           {it.sources.length > 0 && <span className="shop-src">{it.sources.join(' · ')}</span>}
         </span>
-        {walmart && !on && (
+        {staple && <span className="shop-staple-badge">always have</span>}
+        {walmart && !on && !settingStaples && (
           <a
             className="shop-walmart"
             href={walmartSearchUrl(it.name)}
@@ -217,6 +252,9 @@ export default function ShoppingScreen() {
             <button onClick={toggleWalmart} aria-pressed={walmart}>
               {walmart ? 'Hide Walmart' : 'Shop Walmart'}
             </button>
+            <button onClick={() => setSettingStaples((v) => !v)} aria-pressed={settingStaples}>
+              {settingStaples ? 'Done' : 'Set staples'}
+            </button>
             {checked.size > 0 && <button onClick={uncheckAll}>Uncheck all</button>}
           </div>
         )}
@@ -246,28 +284,73 @@ export default function ShoppingScreen() {
             app — one item per line, no prep notes — to paste into Walmart's Sparky or Instacart and
             build a pickup order.
           </p>
-          {walmart && (
+          {settingStaples && (
+            <div className="shop-tip shop-staple-tip">
+              <p>
+                <b>Setting staples:</b> tap the things you always have at home — salt, oil, the spices in
+                your cupboard. They're left off this list and future ones, for both of you. Tap{' '}
+                <b>Done</b> when you're finished.
+              </p>
+              {staplesNeedSetup && (
+                <p className="trip-setup">
+                  <b>One-time setup needed.</b> In Supabase → SQL Editor, run the{' '}
+                  <code>pantry_staples</code> block from <code>supabase-schema.sql</code>, then reload this
+                  page. Until then, staples can't be saved.
+                </p>
+              )}
+            </div>
+          )}
+          {stapleError && <p className="status-line err">{stapleError}</p>}
+          {walmart && !settingStaples && (
             <p className="shop-tip">
               <b>Walmart pickup:</b> tap <b>Walmart ↗</b> on an item to open it in Walmart, add the one
               you want to your cart, then come back and tick it off. When the list is clear, check out in
               Walmart and pick your pickup time.
             </p>
           )}
-          {items.length > 0 && <ul className="shop-list">{items.map(renderItem)}</ul>}
+          {toBuy.length === 0 && !settingStaples && (
+            <p className="shop-section-hint">Everything on this week's list is a staple you already have.</p>
+          )}
+          {shown(items).length > 0 && <ul className="shop-list">{shown(items).map(renderItem)}</ul>}
 
-          {spices.length > 0 && (
+          {shown(spices).length > 0 && (
             <>
               <h2 className="shop-section">Spices &amp; seasonings</h2>
-              <p className="shop-section-hint">You probably have these — tick off what's already in the cupboard.</p>
-              <ul className="shop-list">{spices.map(renderItem)}</ul>
+              <p className="shop-section-hint">
+                You probably have these — tick off what's already in the cupboard, or use{' '}
+                <b>Set staples</b> to leave the ones you always have off the list for good.
+              </p>
+              <ul className="shop-list">{shown(spices).map(renderItem)}</ul>
             </>
           )}
 
-          {noteItems.length > 0 && (
+          {shown(noteItems).length > 0 && (
             <>
               <h2 className="shop-section">Your notes</h2>
               <p className="shop-section-hint">Groceries pulled from what you jotted on each day.</p>
-              <ul className="shop-list">{noteItems.map(renderItem)}</ul>
+              <ul className="shop-list">{shown(noteItems).map(renderItem)}</ul>
+            </>
+          )}
+
+          {staples.length > 0 && (
+            <>
+              <h2 className="shop-section">Staples you always have</h2>
+              <p className="shop-section-hint">
+                {skipped > 0
+                  ? `${skipped} item${skipped === 1 ? '' : 's'} left off this week's list. `
+                  : 'None of these are on this week\'s list. '}
+                Tap × to start buying one again.
+              </p>
+              <div className="fridge-chips">
+                {staples.map((s) => (
+                  <span key={s.key} className="fridge-chip">
+                    {s.name}
+                    <button onClick={() => removeStaple(s.key)} aria-label={`Stop treating ${s.name} as a staple`}>
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
             </>
           )}
         </>

@@ -67,6 +67,62 @@ async function handleChecks(req: VercelRequest, res: VercelResponse, supabase: S
   return res.status(405).json({ error: 'Method not allowed' });
 }
 
+// Pantry staples (routed via a vercel.json rewrite from /api/shopping-staples to
+// ?resource=staples, for the same function-limit reason as the checkmarks).
+// A staple is something the household always has on hand — salt, olive oil —
+// so the shopping screen leaves it off the list. Stored by the item's cleaned,
+// lowercased name (see storeName in src/lib/pickup.ts), shared like the ticks.
+//
+//   GET    /api/shopping-staples                 → { staples: [{ key, name }] }
+//   POST   /api/shopping-staples { key, name }   → { ok }
+//   DELETE /api/shopping-staples?key=<key>       → { ok }
+
+// The table hasn't been created yet (Postgres and PostgREST word this differently).
+const tableMissing = (msg: string) => /does not exist|could not find the table/i.test(msg);
+const STAPLES_SETUP =
+  'Staples need a one-time database setup: run the pantry_staples block from supabase-schema.sql in Supabase.';
+
+async function handleStaples(req: VercelRequest, res: VercelResponse, supabase: SupabaseClient) {
+  if (req.method === 'GET') {
+    const { data, error } = await supabase.from('pantry_staples').select('item_key, name').order('name');
+    res.setHeader('Cache-Control', 'no-store');
+    if (error) {
+      // Not set up yet: let the list load and point at the one-time setup.
+      if (tableMissing(error.message)) return res.status(200).json({ staples: [], needsSetup: true });
+      return res.status(500).json({ error: error.message });
+    }
+    return res.status(200).json({
+      staples: (data ?? []).map((r: any) => ({ key: r.item_key, name: r.name || r.item_key })),
+    });
+  }
+
+  if (req.method === 'POST') {
+    const body = req.body ?? {};
+    const key = norm(body.key).slice(0, 200);
+    const name = typeof body.name === 'string' ? body.name.trim().slice(0, 200) : '';
+    if (!key) return res.status(400).json({ error: 'Provide an item key.' });
+    const { error } = await supabase
+      .from('pantry_staples')
+      .upsert({ item_key: key, name: name || key }, { onConflict: 'item_key' });
+    if (error) {
+      if (tableMissing(error.message)) return res.status(409).json({ error: STAPLES_SETUP, needsSetup: true });
+      return res.status(500).json({ error: error.message });
+    }
+    return res.status(200).json({ ok: true });
+  }
+
+  if (req.method === 'DELETE') {
+    const key = norm(req.query.key);
+    if (!key) return res.status(400).json({ error: 'Provide ?key=….' });
+    const { error } = await supabase.from('pantry_staples').delete().eq('item_key', key);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.status(200).json({ ok: true });
+  }
+
+  res.setHeader('Allow', 'GET, POST, DELETE');
+  return res.status(405).json({ error: 'Method not allowed' });
+}
+
 // Notes that obviously need nothing bought — skip before ever calling the model.
 const NOTE_SKIP =
   /^(left ?overs?|eat(ing)? out|out to eat|dinner out|take[- ]?out|takeaway|order (in|out)|delivery|dining out|restaurant|fend for yourself|nothing|none|n\/a|tbd|\?+)\.?$/i;
@@ -139,6 +195,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Shared shopping-list checkmarks (formerly /api/shopping-checks).
   if (req.query.resource === 'checks') return handleChecks(req, res, supabase);
+  // Pantry staples.
+  if (req.query.resource === 'staples') return handleStaples(req, res, supabase);
 
   // The shopping list itself is GET-only.
   if (req.method !== 'GET') {

@@ -393,6 +393,37 @@ a {
 .rcard-share.copied {
   color: var(--kale);
 }
+/* Dish photo across the top of a card (only cards that have one). The share
+   and heart buttons sit on it, so they get a solid backing to stay readable. */
+.rcard-photo {
+  display: block;
+  width: calc(100% + 36px);
+  max-width: none;
+  margin: -18px -18px 14px;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  background: var(--kale-wash);
+  border-bottom: 2px solid var(--rule);
+}
+.rcard.has-photo .rcard-heart,
+.rcard.has-photo .rcard-share {
+  background: var(--card);
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+.rcard.has-photo .rcard-share {
+  right: 44px;
+  top: 8px;
+}
+.rcard.has-photo .rcard-share.solo {
+  right: 8px;
+}
+.rcard.has-photo h3,
+.rcard.has-photo .eyebrow {
+  padding-right: 0;
+}
 .rp-heart {
   padding: 4px 6px;
   border: 1.5px solid var(--rule);
@@ -1521,6 +1552,36 @@ tr.hot td.ing {
 .shop-walmart:hover {
   background: var(--card);
   border-color: var(--turmeric);
+  color: var(--turmeric);
+}
+
+/* Setting pantry staples: rows marked "always have" while choosing them. */
+.shop-staple-tip {
+  background: var(--turmeric-wash);
+  border-left-color: var(--turmeric);
+}
+.shop-staple-tip p {
+  margin: 0;
+}
+.shop-staple-tip p + p {
+  margin-top: 10px;
+}
+.shop-staple-tip .trip-setup {
+  margin-bottom: 0;
+  background: var(--card);
+}
+.shop-item.staple .shop-check {
+  background: var(--turmeric);
+  border-color: var(--turmeric);
+}
+.shop-staple-badge {
+  flex: none;
+  align-self: center;
+  font-family: 'Space Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
   color: var(--turmeric);
 }
 
