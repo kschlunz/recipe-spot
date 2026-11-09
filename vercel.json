@@ -1,6 +1,7 @@
 {
   "rewrites": [
     { "source": "/api/shopping-checks", "destination": "/api/shopping?resource=checks" },
+    { "source": "/api/shopping-picks", "destination": "/api/shopping?resource=picks" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

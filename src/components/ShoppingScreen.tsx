@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { frac } from '../lib/recipeGrid';
 import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
-import { walmartSearchUrl } from '../lib/walmart';
+import { useWalmartPicks } from '../hooks/useWalmartPicks';
+import { walmartCartUrl, walmartKey, walmartProductUrl, walmartSearchUrl } from '../lib/walmart';
+import WalmartPickEditor from './WalmartPickEditor';
 
 type Amount = { q: number; u: string };
 type Item = {
@@ -47,6 +49,11 @@ export default function ShoppingScreen() {
   const [checked, setChecked] = useState<Set<string>>(() => new Set());
   const [copied, setCopied] = useState(false);
   const [walmart, setWalmart] = useState(readWalmart);
+  const { picks, needsSetup, reload: reloadPicks, save: savePick, forget: forgetPick } = useWalmartPicks(walmart);
+  // The row whose pick form is open, and the rows last sent to a Walmart cart
+  // (both by checkmark key).
+  const [editing, setEditing] = useState<string | null>(null);
+  const [sent, setSent] = useState<string[]>([]);
 
   const toggleWalmart = () => {
     const next = !walmart;
@@ -88,7 +95,10 @@ export default function ShoppingScreen() {
   useEffect(() => {
     load();
   }, [load]);
-  useRefreshOnFocus(() => load(true));
+  useRefreshOnFocus(() => {
+    load(true);
+    if (walmart) reloadPicks();
+  });
 
   const allItems = useMemo(() => [...items, ...spices, ...noteItems], [items, spices, noteItems]);
   const remaining = useMemo(
@@ -96,11 +106,24 @@ export default function ShoppingScreen() {
     [allItems, checked],
   );
 
-  // Toggle optimistically, then persist to the shared list. On failure, reload
-  // so we don't drift from what the other phone sees.
-  const toggle = (it: Item) => {
-    const k = keyOf(it);
-    const willCheck = !checked.has(k);
+  // Unticked items that have a saved Walmart pick — what one tap can send to a
+  // cart — and how many unticked items still don't.
+  const cartItems = useMemo(
+    () => (walmart ? allItems.filter((it) => !checked.has(keyOf(it)) && picks[walmartKey(it.name)]) : []),
+    [walmart, allItems, checked, picks],
+  );
+  // Distinct products: two rows can share a pick ("yellow onion" twice).
+  const cartIds = useMemo(
+    () => [...new Set(cartItems.map((it) => picks[walmartKey(it.name)].itemId))],
+    [cartItems, picks],
+  );
+  const unpicked = remaining - cartItems.length;
+  // Of the rows last sent to the cart, the ones not ticked off yet.
+  const sentLeft = useMemo(() => sent.filter((k) => !checked.has(k)), [sent, checked]);
+
+  // Set a checkmark optimistically, then persist to the shared list. On failure,
+  // reload so we don't drift from what the other phone sees.
+  const setCheck = (k: string, willCheck: boolean) => {
     setChecked((prev) => {
       const next = new Set(prev);
       if (willCheck) next.add(k);
@@ -117,6 +140,17 @@ export default function ShoppingScreen() {
     req.then((r) => {
       if (!r.ok) load(true);
     }).catch(() => load(true));
+  };
+
+  const toggle = (it: Item) => {
+    const k = keyOf(it);
+    setCheck(k, !checked.has(k));
+  };
+
+  // After a cart hand-off: tick off everything that was sent.
+  const tickSent = () => {
+    sentLeft.forEach((k) => setCheck(k, true));
+    setSent([]);
   };
 
   const uncheckAll = () => {
@@ -144,6 +178,9 @@ export default function ShoppingScreen() {
     const k = keyOf(it);
     const on = checked.has(k);
     const m = measured(it);
+    const pk = walmartKey(it.name);
+    const pick = walmart ? picks[pk] : undefined;
+    const shopping = walmart && !on;
     return (
       <li key={k} className={'shop-item' + (on ? ' off' : '')} onClick={() => toggle(it)}>
         <span className={'shop-check' + (on ? ' on' : '')} aria-hidden>
@@ -157,18 +194,38 @@ export default function ShoppingScreen() {
             {it.note && <span className="note"> — {it.note}</span>}
           </span>
           {it.sources.length > 0 && <span className="shop-src">{it.sources.join(' · ')}</span>}
+          {shopping && pick && <span className="shop-pick">pick: {pick.label || `item ${pick.itemId}`}</span>}
         </span>
-        {walmart && !on && (
-          <a
-            className="shop-walmart"
-            href={walmartSearchUrl(it.name)}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            aria-label={`Find ${it.name} at Walmart`}
-          >
-            Walmart ↗
-          </a>
+        {shopping && (
+          <span className="shop-walmart-col" onClick={(e) => e.stopPropagation()}>
+            <a
+              className={'shop-walmart' + (pick ? ' picked' : '')}
+              href={pick ? walmartProductUrl(pick.itemId) : walmartSearchUrl(it.name)}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={pick ? `Open your Walmart pick for ${it.name}` : `Find ${it.name} at Walmart`}
+            >
+              {pick ? '✓ Walmart ↗' : 'Walmart ↗'}
+            </a>
+            {!needsSetup && (
+              <button
+                className="shop-pick-btn"
+                aria-expanded={editing === k}
+                onClick={() => setEditing(editing === k ? null : k)}
+              >
+                {pick ? 'change pick' : 'save pick'}
+              </button>
+            )}
+          </span>
+        )}
+        {shopping && editing === k && (
+          <WalmartPickEditor
+            name={it.name}
+            pick={pick}
+            onSave={(link) => savePick(pk, link)}
+            onForget={() => forgetPick(pk)}
+            onClose={() => setEditing(null)}
+          />
         )}
       </li>
     );
@@ -226,11 +283,50 @@ export default function ShoppingScreen() {
             make them tickable.
           </p>
           {walmart && (
-            <p className="shop-tip">
-              <b>Walmart pickup:</b> tap <b>Walmart ↗</b> on an item to open it in Walmart, add the one
-              you want to your cart, then come back and tick it off. When the list is clear, check out in
-              Walmart and pick your pickup time.
-            </p>
+            <div className="shop-tip shop-walmart-panel">
+              <p>
+                <b>Walmart pickup:</b> tap <b>Walmart ↗</b> on an item to find it in Walmart. To skip the
+                search from then on, copy the link of the product you buy and tap <b>save pick</b> — picks
+                are <b>shared</b> and remembered for future weeks, and everything with a pick goes to your
+                cart in one tap.
+              </p>
+              {needsSetup && (
+                <p className="trip-setup">
+                  <b>One-time setup needed to save picks.</b> In Supabase → SQL Editor, run the{' '}
+                  <code>walmart_picks</code> block from <code>supabase-schema.sql</code>, then reload this
+                  page. The Walmart links work without it.
+                </p>
+              )}
+              {cartItems.length > 0 && (
+                <p className="shop-cart-row">
+                  <a
+                    className="shop-cart-btn"
+                    href={walmartCartUrl(cartIds)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setSent(cartItems.map(keyOf))}
+                  >
+                    Add {cartIds.length} saved pick{cartIds.length === 1 ? '' : 's'} to Walmart cart ↗
+                  </a>
+                  <span className="shop-cart-note">
+                    One of each — adjust amounts in the cart.
+                    {unpicked > 0 && ` ${unpicked} more on the list ${unpicked === 1 ? 'has' : 'have'} no pick yet.`}
+                  </span>
+                </p>
+              )}
+              {sentLeft.length > 0 && (
+                <p className="shop-cart-row">
+                  <span>
+                    <b>In your cart?</b> If Walmart opened its home page instead, one pick couldn't be added
+                    — open the picks one at a time to find it.
+                  </span>
+                  <button onClick={tickSent}>
+                    Tick off {sentLeft.length === 1 ? 'that 1' : `those ${sentLeft.length}`}
+                  </button>
+                  <button onClick={() => setSent([])}>Not yet</button>
+                </p>
+              )}
+            </div>
           )}
           {items.length > 0 && <ul className="shop-list">{items.map(renderItem)}</ul>}
 

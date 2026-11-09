@@ -67,6 +67,121 @@ async function handleChecks(req: VercelRequest, res: VercelResponse, supabase: S
   return res.status(405).json({ error: 'Method not allowed' });
 }
 
+// Saved Walmart picks (routed via a vercel.json rewrite from /api/shopping-picks
+// to ?resource=picks, for the same function-limit reason as the checkmarks).
+// A pick remembers which Walmart product the household buys for an ingredient,
+// keyed by the cleaned ingredient name, so the list can be sent to a Walmart
+// cart by item ID.
+//
+//   GET    /api/shopping-picks                → { picks: { <key>: { itemId, label } } }
+//   POST   /api/shopping-picks { key, link }  → { itemId, label }
+//   DELETE /api/shopping-picks?key=<key>      → { ok }
+
+// Walmart's own link shortener (what the app's share sheet can hand out).
+const WALMART_SHORT_HOSTS = new Set(['walmrt.us']);
+const isWalmartHost = (h: string) => h === 'walmart.com' || h.endsWith('.walmart.com');
+
+// The table hasn't been created yet (Postgres and PostgREST word this differently).
+const tableMissing = (msg: string) => /does not exist|could not find the table/i.test(msg);
+const PICKS_SETUP =
+  'Saved picks need a one-time database setup: run the walmart_picks block from supabase-schema.sql in Supabase.';
+
+type Pick = { itemId: string; label: string };
+
+// Pull the item ID (and a readable name, when the URL carries one) out of a
+// Walmart product URL: /ip/<name>/<id> or /ip/<id>.
+function pickFromUrl(u: URL): Pick | null {
+  if (!isWalmartHost(u.hostname)) return null;
+  const m = u.pathname.match(/\/ip\/(?:([^/]+)\/)?(\d{4,})(?:\/|$)/);
+  if (!m) return null;
+  let label = '';
+  try {
+    label = decodeURIComponent(m[1] ?? '').replace(/-+/g, ' ').trim().slice(0, 120);
+  } catch {
+    /* odd escaping — the ID is what matters */
+  }
+  return { itemId: m[2], label };
+}
+
+// Accepts whatever was pasted: a bare item ID, a product URL, share text with a
+// URL in it, or a Walmart short link (followed, a few hops at most, and only
+// while it stays on Walmart's own hosts).
+async function resolvePick(raw: string): Promise<Pick | null> {
+  const text = raw.trim();
+  if (/^\d{4,}$/.test(text)) return { itemId: text, label: '' };
+  const found = text.match(/https?:\/\/[^\s<>"']+/i);
+  let href = found ? found[0] : /^[\w.-]+\.[a-z]{2,}\//i.test(text) ? `https://${text}` : '';
+  for (let hop = 0; href && hop < 4; hop++) {
+    let u: URL;
+    try {
+      u = new URL(href);
+    } catch {
+      return null;
+    }
+    const direct = pickFromUrl(u);
+    if (direct) return direct;
+    if (u.protocol !== 'https:' || !(WALMART_SHORT_HOSTS.has(u.hostname) || isWalmartHost(u.hostname))) return null;
+    try {
+      const r = await fetch(u, { redirect: 'manual', signal: AbortSignal.timeout(5000) });
+      const next = r.headers.get('location');
+      href = next ? new URL(next, u).toString() : '';
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+async function handlePicks(req: VercelRequest, res: VercelResponse, supabase: SupabaseClient) {
+  if (req.method === 'GET') {
+    const { data, error } = await supabase.from('walmart_picks').select('item_key, item_id, label');
+    res.setHeader('Cache-Control', 'no-store');
+    if (error) {
+      // Not set up yet: let the list load and point at the one-time setup.
+      if (tableMissing(error.message)) return res.status(200).json({ picks: {}, needsSetup: true });
+      return res.status(500).json({ error: error.message });
+    }
+    const picks: Record<string, Pick> = {};
+    for (const r of data ?? []) picks[(r as any).item_key] = { itemId: (r as any).item_id, label: (r as any).label ?? '' };
+    return res.status(200).json({ picks });
+  }
+
+  if (req.method === 'POST') {
+    const body = req.body ?? {};
+    const key = norm(body.key).slice(0, 200);
+    const link = typeof body.link === 'string' ? body.link.slice(0, 2000) : '';
+    if (!key || !link.trim()) return res.status(400).json({ error: 'Provide an item key and a Walmart link.' });
+    const pick = await resolvePick(link);
+    if (!pick) {
+      return res.status(400).json({
+        error: "Couldn't find a Walmart product in that. Open the product in Walmart, copy its link, and paste it here.",
+      });
+    }
+    const { error } = await supabase
+      .from('walmart_picks')
+      .upsert(
+        { item_key: key, item_id: pick.itemId, label: pick.label, updated_at: new Date().toISOString() },
+        { onConflict: 'item_key' },
+      );
+    if (error) {
+      if (tableMissing(error.message)) return res.status(409).json({ error: PICKS_SETUP, needsSetup: true });
+      return res.status(500).json({ error: error.message });
+    }
+    return res.status(200).json(pick);
+  }
+
+  if (req.method === 'DELETE') {
+    const key = norm(req.query.key);
+    if (!key) return res.status(400).json({ error: 'Provide ?key=….' });
+    const { error } = await supabase.from('walmart_picks').delete().eq('item_key', key);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.status(200).json({ ok: true });
+  }
+
+  res.setHeader('Allow', 'GET, POST, DELETE');
+  return res.status(405).json({ error: 'Method not allowed' });
+}
+
 // Notes that obviously need nothing bought — skip before ever calling the model.
 const NOTE_SKIP =
   /^(left ?overs?|eat(ing)? out|out to eat|dinner out|take[- ]?out|takeaway|order (in|out)|delivery|dining out|restaurant|fend for yourself|nothing|none|n\/a|tbd|\?+)\.?$/i;
@@ -139,6 +254,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Shared shopping-list checkmarks (formerly /api/shopping-checks).
   if (req.query.resource === 'checks') return handleChecks(req, res, supabase);
+  // Saved Walmart picks.
+  if (req.query.resource === 'picks') return handlePicks(req, res, supabase);
 
   // The shopping list itself is GET-only.
   if (req.method !== 'GET') {
